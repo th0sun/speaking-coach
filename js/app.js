@@ -599,11 +599,41 @@ function App() {
         const savedAchievements = localStorage.getItem('achievements');
         const completedToday = localStorage.getItem(`completed_day_${currentDay}`);
 
-        if (savedDay) setCurrentDay(parseInt(savedDay));
-        if (savedSessions) setSessions(JSON.parse(savedSessions));
+        if (savedSessions) {
+            const sessions = JSON.parse(savedSessions);
+            setSessions(sessions);
+
+            // 🧠 Smart Progression Logic (Strict Midnight Reset)
+            let nextDay = parseInt(savedDay || 1);
+            const lastSession = sessions[sessions.length - 1];
+
+            if (lastSession) {
+                // 1. Auto-advance if last session matches current day
+                if (lastSession.day >= nextDay) {
+                    nextDay = lastSession.day + 1;
+                }
+
+                // 2. Cooldown Check: If trained today, LOCK the app
+                const lastDate = new Date(lastSession.date);
+                const today = new Date();
+
+                if (lastDate.toDateString() === today.toDateString()) {
+                    setTodayCompleted(true); // Lock until tomorrow
+                } else {
+                    setTodayCompleted(false); // Unlocked
+                }
+            } else {
+                setTodayCompleted(false);
+            }
+
+            setCurrentDay(nextDay);
+        } else {
+            if (savedDay) setCurrentDay(parseInt(savedDay));
+            if (completedToday) setTodayCompleted(completedToday === 'true');
+        }
+
         if (savedApiKey) setApiKey(savedApiKey);
         if (savedAchievements) setAchievements(JSON.parse(savedAchievements));
-        if (completedToday) setTodayCompleted(completedToday === 'true');
     }
 
     function saveProgress(day, newSessions) {
@@ -639,15 +669,47 @@ function App() {
         reader.onload = (e) => {
             try {
                 const data = JSON.parse(e.target.result);
-                setCurrentDay(data.currentDay || 1);
-                setSessions(data.sessions || []);
-                setAchievements(data.achievements || []);
 
-                localStorage.setItem('current_day', (data.currentDay || 1).toString());
-                localStorage.setItem('sessions', JSON.stringify(data.sessions || []));
-                localStorage.setItem('achievements', JSON.stringify(data.achievements || []));
+                const importedSessions = data.sessions || [];
+                const importedAchievements = data.achievements || [];
 
-                alert('นำเข้าข้อมูลสำเร็จ!');
+                // 🧠 Smart Progression Logic (Match loadProgress)
+                let importedDay = data.currentDay || 1;
+                const lastSession = importedSessions[importedSessions.length - 1];
+
+                let shouldLock = false;
+
+                if (lastSession) {
+                    // 1. Auto-advance
+                    if (lastSession.day >= importedDay) {
+                        importedDay = lastSession.day + 1;
+                    }
+
+                    // 2. Cooldown Check
+                    const lastDate = new Date(lastSession.date);
+                    const today = new Date();
+
+                    if (lastDate.toDateString() === today.toDateString()) {
+                        shouldLock = true;
+                    }
+                }
+
+                setCurrentDay(importedDay);
+                setSessions(importedSessions);
+                setAchievements(importedAchievements);
+
+                // Set lock status based on date analysis
+                setTodayCompleted(shouldLock);
+
+                localStorage.setItem('current_day', importedDay.toString());
+                localStorage.setItem('sessions', JSON.stringify(importedSessions));
+                localStorage.setItem('achievements', JSON.stringify(importedAchievements));
+
+                if (!shouldLock) {
+                    localStorage.removeItem(`completed_day_${importedDay}`);
+                }
+
+                alert(`นำเข้าข้อมูลสำเร็จ! (Day ${importedDay})${shouldLock ? ' - พักผ่อนก่อนนะครับ พรุ่งนี้ค่อยลุยต่อ! 💤' : ''}`);
             } catch (error) {
                 alert('ไฟล์ไม่ถูกต้อง');
             }
