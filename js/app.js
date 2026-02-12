@@ -1,5 +1,127 @@
 const { useState, useEffect, useRef } = React;
 
+// --- Auth Components ---
+const AuthView = ({ onLogin, onGuest }) => {
+    const [isRegister, setIsRegister] = useState(false);
+    const [username, setUsername] = useState('');
+    const [pin, setPin] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setIsLoading(true);
+
+        const endpoint = isRegister ? '/api/register' : '/api/login';
+        const payload = { username, pin };
+
+        try {
+            const response = await fetch(`${CONFIG.BACKEND_URL}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Authentication failed');
+            }
+
+            if (isRegister) {
+                // Auto-login after register
+                alert('สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ');
+                setIsRegister(false);
+                setPin('');
+            } else {
+                onLogin(data.user, data.data);
+            }
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="flex flex-col items-center justify-center min-h-screen p-4">
+            <div className="glass-effect p-8 rounded-3xl shadow-2xl w-full max-w-md">
+                <div className="text-center mb-8">
+                    <h1 className="text-4xl font-bold text-purple-800 mb-2">Speaking Coach</h1>
+                    <p className="text-gray-600">Zero to Hero in 30 Days</p>
+                </div>
+
+                <div className="flex bg-gray-100 rounded-xl p-1 mb-6">
+                    <button
+                        className={`flex-1 py-2 rounded-lg font-semibold transition ${!isRegister ? 'bg-white shadow text-purple-700' : 'text-gray-500'}`}
+                        onClick={() => { setIsRegister(false); setError(''); }}
+                    >
+                        เข้าสู่ระบบ
+                    </button>
+                    <button
+                        className={`flex-1 py-2 rounded-lg font-semibold transition ${isRegister ? 'bg-white shadow text-purple-700' : 'text-gray-500'}`}
+                        onClick={() => { setIsRegister(true); setError(''); }}
+                    >
+                        สมัครสมาชิก
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Username (ภาษาอังกฤษ)</label>
+                        <input
+                            type="text"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+                            className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-purple-500 focus:outline-none"
+                            placeholder="เช่น thesun"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">PIN (ตัวเลข 6 หลัก)</label>
+                        <input
+                            type="password"
+                            value={pin}
+                            onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                            className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-purple-500 focus:outline-none tracking-widest text-center text-2xl"
+                            placeholder="••••••"
+                            required
+                        />
+                    </div>
+
+                    {error && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded-lg">{error}</p>}
+
+                    <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-xl font-bold shadow-lg hover:opacity-90 transition disabled:opacity-50"
+                    >
+                        {isLoading ? 'กำลังโหลด...' : (isRegister ? 'สมัครสมาชิก' : 'เข้าสู่ระบบ')}
+                    </button>
+                </form>
+
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                    <button
+                        onClick={onGuest}
+                        className="w-full py-2 text-gray-500 font-medium hover:text-purple-600 transition"
+                    >
+                        ใช้งานแบบไม่ล็อคอิน (ข้อมูลจะอยู่ในเครื่องนี้เท่านั้น)
+                    </button>
+                </div>
+
+                <div className="mt-4 text-center">
+                    <p className="text-xs text-gray-400">
+                        ระบบจะเก็บข้อมูลของคุณไว้อย่างปลอดภัยและสามารถเข้าใช้งานได้จากทุกเครื่อง
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 // ข้อมูลหลักสูตร (เหมือนเดิม แต่เพิ่มเติม AI criteria)
 const TRAINING_DATA = {
     week1: {
@@ -530,23 +652,41 @@ ${sessions && sessions.length > 0 ? `
 ` : '- นี่เป็นครั้งแรก ให้วิเคราะห์เชิงลึกเพื่อเป็นพื้นฐานการเปรียบเทียบครั้งต่อไป'}`;
 
         try {
-            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${CONFIG.GEMINI_MODEL}:generateContent?key=${apiKey}`;
-            console.log('🤖 Calling Gemini API directly...');
+            console.log('🤖 Calling Analysis API...');
 
-            // Prepare Request Parts
-            const parts = [];
-            if (audioPart) parts.push(audioPart); // Add audio if available
-            parts.push({ text: prompt });         // Add text prompt
+            // Use backend API if audioBlob exists, otherwise call Gemini directly
+            let response;
 
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: parts
-                    }]
-                })
-            });
+            if (audioBlob) {
+                // Send to backend with audio file
+                console.log('📤 Sending audio to backend for analysis...');
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'recording.webm');
+                formData.append('prompt', prompt);
+
+                response = await fetch(`${this.backendURL}/api/analyze`, {
+                    method: 'POST',
+                    body: formData
+                });
+            } else {
+                // Fallback: Call Gemini API directly for text-only analysis
+                console.log('🤖 No audio - calling Gemini API directly...');
+                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${CONFIG.GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
+                // Prepare Request Parts
+                const parts = [];
+                parts.push({ text: prompt });         // Add text prompt
+
+                response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: parts
+                        }]
+                    })
+                });
+            }
 
             if (!response.ok) {
                 console.error('❌ Gemini API Error:', response.status, response.statusText);
@@ -585,12 +725,15 @@ ${sessions && sessions.length > 0 ? `
             return null;
         }
     }
-
-
 }
 
 // Main App Component
 function App() {
+    // --- Auth State ---
+    const [user, setUser] = useState(null); // null = not logged in
+    const [isAuthChecking, setIsAuthChecking] = useState(true);
+
+    // --- Critical State ---
     const [currentDay, setCurrentDay] = useState(1);
     const [currentView, setCurrentView] = useState('dashboard');
     const [timer, setTimer] = useState(0);
@@ -628,9 +771,49 @@ function App() {
     const audioPlayer = useRef(null);
     const recordingStartTime = useRef(0);
 
+    // 1. Load Data on Startup (or after Login)
     useEffect(() => {
-        loadProgress();
-    }, []);
+        if (user) {
+            // Already have data from login response, or can fetch fresh
+            console.log('✅ User logged in:', user.username);
+        } else {
+            // Check for existing session? (Optional: for now just show login)
+            setIsAuthChecking(false);
+        }
+    }, [user]);
+
+    // 2. Save Data on Change (Auto-save)
+    useEffect(() => {
+        if (!user) return; // Don't save if not logged in
+
+        const saveData = async () => {
+            const dataToSave = {
+                currentDay,
+                sessions,
+                achievements,
+                settings: { apiKeys }
+            };
+
+            try {
+                await fetch(`${CONFIG.BACKEND_URL} /api/save_data`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: user.id,
+                        data: dataToSave
+                    })
+                });
+                console.log('💾 Data saved to cloud');
+            } catch (err) {
+                console.error('❌ Failed to save data:', err);
+            }
+        };
+
+        // Debounce save (wait 1s after last change)
+        const timeoutId = setTimeout(saveData, 1000);
+        return () => clearTimeout(timeoutId);
+
+    }, [currentDay, sessions, achievements, apiKeys, user]);
 
     useEffect(() => {
         let interval;
@@ -646,77 +829,59 @@ function App() {
         // Initialize AI Coach (backend handles API key)
         aiCoach.current = new AICoach();
     }, []);
+    const handleGuestLogin = () => {
+        try {
+            // Load data from LocalStorage
+            const savedDay = localStorage.getItem('speakingCoach_currentDay');
+            const savedSessions = localStorage.getItem('speakingCoach_sessions');
+            const savedAchievements = localStorage.getItem('speakingCoach_achievements');
+            const savedApiKeys = localStorage.getItem('speakingCoach_apiKeys');
 
-    async function loadProgress() {
-        const savedDay = localStorage.getItem('current_day');
-        const savedSessions = localStorage.getItem('sessions');
-        const savedApiKey = localStorage.getItem('gemini_api_key');
-        const savedAchievements = localStorage.getItem('achievements');
-        const completedToday = localStorage.getItem(`completed_day_${currentDay}`);
+            // Legacy loading usage (fallback)
+            const oldDay = localStorage.getItem('current_day');
+            const oldSessions = localStorage.getItem('sessions');
+            const oldAchievements = localStorage.getItem('achievements');
 
-        if (savedSessions) {
-            const sessions = JSON.parse(savedSessions);
-            setSessions(sessions);
+            if (savedDay) setCurrentDay(parseInt(savedDay));
+            else if (oldDay) setCurrentDay(parseInt(oldDay));
 
-            // 🧠 Smart Progression Logic (Strict Midnight Reset)
-            let nextDay = parseInt(savedDay || 1);
-            const lastSession = sessions[sessions.length - 1];
+            if (savedSessions) setSessions(JSON.parse(savedSessions));
+            else if (oldSessions) setSessions(JSON.parse(oldSessions));
 
-            if (lastSession) {
-                // 1. Auto-advance if last session matches current day
-                const maxCompletedDay = Math.max(...sessions.map(s => s.day));
-                if (maxCompletedDay >= nextDay) {
-                    nextDay = maxCompletedDay + 1;
-                }
+            if (savedAchievements) setAchievements(JSON.parse(savedAchievements));
+            else if (oldAchievements) setAchievements(JSON.parse(oldAchievements));
 
-                // 2. Cooldown Check: If trained today, LOCK the app
-                const lastDate = new Date(lastSession.date);
-                const today = new Date();
-
-                if (lastDate.toDateString() === today.toDateString()) {
-                    setTodayCompleted(true); // Lock until tomorrow
-                } else {
-                    setTodayCompleted(false); // Unlocked
-                }
+            // Load API keys
+            if (savedApiKeys) {
+                const keys = JSON.parse(savedApiKeys);
+                setApiKeys(keys);
+                if (keys.length > 0) setActiveKeyId(keys[0].id);
             } else {
-                setTodayCompleted(false);
+                // Try legacy key
+                const oldKey = localStorage.getItem('gemini_api_key') || localStorage.getItem('api_key');
+                if (oldKey) {
+                    const newKey = {
+                        id: Date.now().toString(),
+                        key: oldKey,
+                        name: 'Main Key',
+                        isActive: true,
+                        lastUsed: new Date().toISOString(),
+                        successCount: 0,
+                        errorCount: 0
+                    };
+                    setApiKeys([newKey]);
+                    setActiveKeyId(newKey.id);
+                }
             }
 
-            setCurrentDay(nextDay);
-        } else {
-            if (savedDay) setCurrentDay(parseInt(savedDay));
-            if (completedToday) setTodayCompleted(completedToday === 'true');
+            console.log('👤 Guest login successful - Loaded local data');
+            setUser({ username: 'Guest', isGuest: true });
+        } catch (error) {
+            console.error('Guest login error:', error);
+            alert('เกิดข้อผิดพลาดในการโหลดข้อมูลเก่า');
+            setUser({ username: 'Guest', isGuest: true }); // Still let them in
         }
-
-        // Load API Keys (with migration from old single-key format)
-        const savedApiKeys = localStorage.getItem('api_keys');
-        const savedActiveKeyId = localStorage.getItem('active_key_id');
-        const oldApiKey = localStorage.getItem('api_key'); // Legacy single key
-
-        if (savedApiKeys) {
-            const keys = JSON.parse(savedApiKeys);
-            setApiKeys(keys);
-            setActiveKeyId(savedActiveKeyId || (keys.length > 0 ? keys[0].id : null));
-        } else if (oldApiKey) {
-            // Migrate old single key to new format
-            const migratedKey = {
-                id: Date.now().toString(),
-                key: oldApiKey,
-                name: 'Main Key',
-                lastUsed: new Date().toISOString(),
-                last429: null,
-                errorCount: 0,
-                successCount: 0,
-                isActive: true
-            };
-            setApiKeys([migratedKey]);
-            setActiveKeyId(migratedKey.id);
-            localStorage.setItem('api_keys', JSON.stringify([migratedKey]));
-            localStorage.setItem('active_key_id', migratedKey.id);
-        }
-
-        if (savedAchievements) setAchievements(JSON.parse(savedAchievements));
-    }
+    };
 
     // ===== API Key Management Functions =====
 
@@ -729,7 +894,7 @@ function App() {
         const newKey = {
             id: Date.now().toString(),
             key: key.trim(),
-            name: name.trim() || `Key ${apiKeys.length + 1}`,
+            name: name.trim() || `Key ${apiKeys.length + 1} `,
             lastUsed: null,
             last429: null,
             errorCount: 0,
@@ -803,7 +968,7 @@ function App() {
             // Check if key is usable (no recent 429 or 429 was more than 1 hour ago)
             if (!nextKey.last429) {
                 setActiveKey(nextKey.id);
-                console.log(`🔄 Rotated to Key: ${nextKey.name}`);
+                console.log(`🔄 Rotated to Key: ${nextKey.name} `);
                 return nextKey;
             }
 
@@ -843,7 +1008,7 @@ function App() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `speaking-coach-backup-${new Date().toISOString().split('T')[0]}.json`;
+        a.download = `speaking - coach - backup - ${new Date().toISOString().split('T')[0]}.json`;
         a.click();
     }
 
@@ -908,10 +1073,10 @@ function App() {
                 localStorage.setItem('achievements', JSON.stringify(importedAchievements));
 
                 if (!shouldLock) {
-                    localStorage.removeItem(`completed_day_${importedDay}`);
+                    localStorage.removeItem(`completed_day_${importedDay} `);
                 }
 
-                alert(`นำเข้าข้อมูลสำเร็จ! (Day ${importedDay})${shouldLock ? ' - พักผ่อนก่อนนะครับ พรุ่งนี้ค่อยลุยต่อ! 💤' : ''}`);
+                alert(`นำเข้าข้อมูลสำเร็จ!(Day ${importedDay})${shouldLock ? ' - พักผ่อนก่อนนะครับ พรุ่งนี้ค่อยลุยต่อ! 💤' : ''} `);
             } catch (error) {
                 alert('ไฟล์ไม่ถูกต้อง');
             }
@@ -1025,7 +1190,7 @@ function App() {
                         // Force restart to finalize current interim result
                         if (recog && mediaRecorder && mediaRecorder.state === 'recording') {
                             try {
-                                console.log(`✂️ Force finalizing: ${isTooLong ? 'Too long' : 'Silence detected'}`);
+                                console.log(`✂️ Force finalizing: ${isTooLong ? 'Too long' : 'Silence detected'} `);
                                 recog.stop();
                                 setTimeout(() => {
                                     if (mediaRecorder && mediaRecorder.state === 'recording') {
@@ -1128,7 +1293,7 @@ function App() {
 
         while (attempts < apiKeys.length && !feedback) {
             try {
-                console.log(`Attempt ${attempts + 1}: Using ${currentKey.name}`);
+                console.log(`Attempt ${attempts + 1}: Using ${currentKey.name} `);
 
                 // Pass sessions for progress comparison
                 feedback = await aiCoach.current.analyzeSpeech(
@@ -1146,7 +1311,7 @@ function App() {
                 console.log('✅ AI analysis complete:', feedback);
 
             } catch (error) {
-                console.error(`❌ Error with ${currentKey.name}:`, error);
+                console.error(`❌ Error with ${currentKey.name}: `, error);
 
                 // Check if it's a 429 error
                 if (error.status === 429 || error.message?.includes('429')) {
@@ -1164,7 +1329,7 @@ function App() {
                 } else {
                     // Other errors (network, etc.)
                     updateKeyStats(currentKey.id, 'error', error);
-                    alert(`เกิดข้อผิดพลาด: ${error.message}`);
+                    alert(`เกิดข้อผิดพลาด: ${error.message} `);
                     break;
                 }
             }
@@ -1200,27 +1365,27 @@ function App() {
 
         try {
             // Build context for AI
-            const contextPrompt = `You are a speaking coach assistant. The user just completed a speaking session and received feedback. Now they want to ask you follow-up questions.
+            const contextPrompt = `You are a speaking coach assistant.The user just completed a speaking session and received feedback.Now they want to ask you follow - up questions.
 
-**Session Information:**
-- Duration: ${timer} seconds
-- Transcript: ${JSON.stringify(transcript)}
+** Session Information:**
+    - Duration: ${timer} seconds
+        - Transcript: ${JSON.stringify(transcript)}
 
-**AI Feedback Given:**
-${JSON.stringify(aiFeedback, null, 2)}
+** AI Feedback Given:**
+    ${JSON.stringify(aiFeedback, null, 2)}
 
-**Previous Conversation:**
-${chatMessages.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n')}
+** Previous Conversation:**
+    ${chatMessages.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n')}
 
-**User Question:**
-${userMessage}
+** User Question:**
+    ${userMessage}
 
-**Instructions:**
-- Answer in Thai language
-- Be specific and reference the transcript or feedback scores
-- Keep answers concise but helpful
-- If asked about specific parts, quote from the transcript
-- Be encouraging and constructive`;
+** Instructions:**
+    - Answer in Thai language
+        - Be specific and reference the transcript or feedback scores
+            - Keep answers concise but helpful
+                - If asked about specific parts, quote from the transcript
+                    - Be encouraging and constructive`;
 
             const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${CONFIG.GEMINI_MODEL}:generateContent?key=${activeKey.key}`;
 
@@ -1391,6 +1556,34 @@ ${userMessage}
         const powerWordData = weekData.powerWords.find(pw => pw.day === currentDay);
 
         return { weekData, topicData, powerWordData };
+    }
+
+    const handleLogin = (loggedInUser, userData) => {
+        setUser(loggedInUser);
+        if (userData) {
+            if (userData.currentDay) setCurrentDay(userData.currentDay);
+            if (userData.sessions) setSessions(userData.sessions);
+            if (userData.achievements) setAchievements(userData.achievements);
+
+            // Handle API Keys from backend settings
+            if (userData.settings && userData.settings.apiKeys) {
+                setApiKeys(userData.settings.apiKeys);
+                if (userData.settings.apiKeys.length > 0) setActiveKeyId(userData.settings.apiKeys[0].id);
+            }
+        }
+        setIsAuthChecking(false);
+    };
+
+    if (isAuthChecking) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-gray-50">
+                <div className="text-purple-600 font-bold text-xl animate-pulse">Loading Speaking Coach...</div>
+            </div>
+        );
+    }
+
+    if (!user) {
+        return <AuthView onLogin={handleLogin} onGuest={handleGuestLogin} />;
     }
 
     const { weekData, topicData, powerWordData } = getTodayData();
