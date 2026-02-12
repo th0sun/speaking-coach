@@ -609,8 +609,9 @@ function App() {
 
             if (lastSession) {
                 // 1. Auto-advance if last session matches current day
-                if (lastSession.day >= nextDay) {
-                    nextDay = lastSession.day + 1;
+                const maxCompletedDay = Math.max(...sessions.map(s => s.day));
+                if (maxCompletedDay >= nextDay) {
+                    nextDay = maxCompletedDay + 1;
                 }
 
                 // 2. Cooldown Check: If trained today, LOCK the app
@@ -680,9 +681,10 @@ function App() {
                 let shouldLock = false;
 
                 if (lastSession) {
-                    // 1. Auto-advance
-                    if (lastSession.day >= importedDay) {
-                        importedDay = lastSession.day + 1;
+                    // 1. Auto-advance using Math.max for safety
+                    const maxCompletedDay = Math.max(...importedSessions.map(s => s.day));
+                    if (maxCompletedDay >= importedDay) {
+                        importedDay = maxCompletedDay + 1;
                     }
 
                     // 2. Cooldown Check
