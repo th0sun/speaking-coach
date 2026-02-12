@@ -93,7 +93,7 @@ def analyze():
         if not prompt:
             return jsonify({'error': 'Prompt is required'}), 400
         
-        logger.info(f'🤖 Analyzing speech...')
+        logger.info('🤖 Analyzing speech...')
         logger.info(f'   📝 Prompt length: {len(prompt):,} characters')
         logger.info(f'   🎙️ Audio included: {"✅ YES" if audio_base64 else "❌ NO (text-only)"}')
         
