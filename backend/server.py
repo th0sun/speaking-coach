@@ -79,6 +79,9 @@ def analyze():
                         audio_mime_type = 'audio/webm'  # Default
                     
                     logger.info(f'✅ Audio decoded successfully: {len(audio_base64)} bytes, MIME: {audio_mime_type}')
+                    # Debug info
+                    logger.info(f'   🔍 File size (base64): {len(audio_base64):,} characters')
+                    logger.info(f'   🔍 Estimated audio size: ~{len(audio_base64) * 3 / 4 / 1024:.1f} KB')
                 except Exception as e:
                     logger.error(f'❌ Failed to process audio file: {e}')
                     return jsonify({'error': f'Failed to process audio: {str(e)}'}), 400
@@ -90,7 +93,9 @@ def analyze():
         if not prompt:
             return jsonify({'error': 'Prompt is required'}), 400
         
-        logger.info(f'🤖 Analyzing speech... (prompt length: {len(prompt)} chars, audio: {"yes" if audio_base64 else "no"})')
+        logger.info(f'🤖 Analyzing speech...')
+        logger.info(f'   📝 Prompt length: {len(prompt):,} characters')
+        logger.info(f'   🎙️ Audio included: {"✅ YES" if audio_base64 else "❌ NO (text-only)"}')
         
         # Build request parts for Gemini API
         parts = []
@@ -107,6 +112,8 @@ def analyze():
         
         # Add text prompt
         parts.append({'text': prompt})
+        
+        logger.info(f'📤 Sending to Gemini API with {len(parts)} parts: {"[Audio + Text]" if audio_base64 else "[Text only]"}')
         
         # Call Gemini API
         response = requests.post(
