@@ -29,10 +29,10 @@ GEMINI_API_BASE = f'https://generativelanguage.googleapis.com/v1beta/models/{GEM
 DATABASE_URL = os.getenv('DATABASE_URL')
 USE_POSTGRES = DATABASE_URL is not None and 'postgresql' in DATABASE_URL.lower()
 
+psycopg2 = None
 if USE_POSTGRES:
     try:
         import psycopg2
-        from psycopg2.extras import RealDictCursor
         logger.info('✅ PostgreSQL mode enabled')
     except ImportError:
         logger.warning('⚠️ psycopg2 not installed, falling back to SQLite')
@@ -186,7 +186,7 @@ def init_db():
             ''')
             conn.commit()
             conn.close()
-            logger.info(f"✅ PostgreSQL database initialized")
+            logger.info('✅ PostgreSQL database initialized')
         else:
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
@@ -200,7 +200,7 @@ def init_db():
             ''')
             conn.commit()
             conn.close()
-            logger.info(f"✅ SQLite database initialized: {DB_NAME}")
+            logger.info('✅ SQLite database initialized: ' + DB_NAME)
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
 
@@ -373,7 +373,7 @@ if __name__ == '__main__':
     logger.info(f'📊 Database: {"PostgreSQL (Render)" if USE_POSTGRES else "SQLite (Local)"}')
     
     if USE_POSTGRES:
-        logger.info(f'✅ PostgreSQL connection ready for persistent global data')
+        logger.info('✅ PostgreSQL connection ready for persistent global data')
     
     port = int(os.environ.get("PORT", 5001))
     logger.info(f'🚀 Starting Flask server on port {port}')

@@ -1,4 +1,5 @@
 flask
 flask-cors
 python-dotenv
-requestspsycopg2-binary
+requests
+psycopg2-binary
