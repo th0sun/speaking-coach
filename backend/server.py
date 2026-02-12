@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 import requests
 import logging
 import base64
-import io
 
 # Load environment variables
 load_dotenv()
