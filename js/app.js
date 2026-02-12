@@ -294,13 +294,26 @@ const TRAINING_DATA = {
     }
 };
 
+// Helper: Convert Blob to Base64
+async function convertBlobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const base64 = reader.result.split(',')[1]; // Remove data:audio/webm;base64, prefix
+            resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
 // AI Coach System (Now uses backend API)
 class AICoach {
     constructor() {
         this.backendURL = CONFIG.BACKEND_URL;
     }
 
-    async analyzeSpeech(apiKey, transcript, duration, weekData, topicData, sessions = []) {
+    async analyzeSpeech(apiKey, audioBlob, transcript, duration, weekData, topicData, sessions = []) {
         // Handle transcript properly with TIMING information
         let transcriptText = '';
         let timingInfo = '';
@@ -394,13 +407,38 @@ class AICoach {
             }
         }
 
-        const prompt = `คุณคือโค้ชสอนการพูดมืออาชีพ วิเคราะห์การพูดต่อไปนี้อย่างละเอียด:
+        // 🎙️ Audio Handling
+        let audioPart = null;
+        if (audioBlob) {
+            try {
+                console.log('🎙️ Converting audio blob to base64...');
+                const audioBase64 = await convertBlobToBase64(audioBlob);
+                audioPart = {
+                    inline_data: {
+                        mime_type: "audio/webm",
+                        data: audioBase64
+                    }
+                };
+                console.log('✅ Audio ready for analysis');
+            } catch (err) {
+                console.error('❌ Failed to convert audio:', err);
+            }
+        }
+
+        const prompt = `คุณคือโค้ชสอนการพูดมืออาชีพ วิเคราะห์การพูดต่อไปนี้อย่างละเอียดจาก**ไฟล์เสียงจริง**และ Transcript:
 
 **หัวข้อ:** ${topicData.title} - ${topicData.desc}
 **เป้าหมายสัปดาห์นี้:** ${weekData.goal}
 **ระยะเวลา:** ${Math.floor(duration / 60)} นาที ${duration % 60} วินาที
 
-**เนื้อหาที่พูด (มี timestamp):**
+**สิ่งที่ต้องวิเคราะห์จากเสียง (Audio):**
+1. **น้ำเสียง (Tone):** ความมั่นใจ, ความเป็นธรรมชาติ, พลังเสียง
+2. **จังหวะ (Pace):** ฟังจังหวะการพูดจริงๆ ว่าเร็ว/ช้า/เหมาะสม
+3. **การหยุด (Pauses):** ฟัง Dead Air หรือการหยุดหายใจว่าเหมาะสมไหม
+4. **ความชัดเจน (Clarity):** การออกเสียง ร.เรือ ล.ลิง และคำควบกล้ำ
+5. **อารมณ์ (Emotion):** สื่อสารอารมณ์ได้ตรงกับเนื้อหาไหม
+
+**เนื้อหาที่พูด (Transcript อ้างอิง):**
 ${transcriptText}
 ${timingInfo}
 ${pauseAnalysis}
@@ -476,6 +514,7 @@ ${previousFeedback}
 }
 
 สิ่งสำคัญ:
+- **Prioritize Audio:** ให้ความสำคัญสิ่งที่ฟังได้จากเสียงมากกว่า transcript
 - แยกประโยคและวิเคราะห์ทีพละประโยค
 - ดูว่ามีโครงสร้าง intro-body-conclusion หรือไม่
 - **วิเคราะห์จังหวะการพูดจาก timestamp** (เร็ว/ช้า/สม่ำเสมอ)
@@ -494,12 +533,17 @@ ${sessions && sessions.length > 0 ? `
             const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${CONFIG.GEMINI_MODEL}:generateContent?key=${apiKey}`;
             console.log('🤖 Calling Gemini API directly...');
 
+            // Prepare Request Parts
+            const parts = [];
+            if (audioPart) parts.push(audioPart); // Add audio if available
+            parts.push({ text: prompt });         // Add text prompt
+
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     contents: [{
-                        parts: [{ text: prompt }]
+                        parts: parts
                     }]
                 })
             });
@@ -1041,7 +1085,7 @@ function App() {
         setLiveTranscript('');
     }
 
-    async function analyzeWithAI(savedTranscript = null, savedTimer = null) {
+    async function analyzeWithAI(savedTranscript = null, savedTimer = null, savedBlob = null) {
         const activeKey = getActiveKey();
 
         if (!activeKey) {
@@ -1056,12 +1100,14 @@ function App() {
         // Use saved data if provided (for re-analysis), otherwise use current state
         const useTranscript = savedTranscript || transcript;
         const useDuration = savedTimer !== null ? savedTimer : timer;
+        const useBlob = savedBlob || recordedBlob;
 
         // Save current recording for potential re-analysis (only if not already re-analyzing)
         if (!savedTranscript) {
             setLastRecording({
                 transcript: transcript,
                 timer: timer,
+                audioBlob: recordedBlob,
                 timestamp: new Date().toISOString()
             });
         }
@@ -1073,6 +1119,7 @@ function App() {
 
         console.log('🤖 Starting AI analysis with rotation...');
         console.log('Transcript data:', transcriptData);
+        if (useBlob) console.log('🎙️ Including Audio Blob for analysis');
 
         // **Auto-Rotation Logic**: Try all keys until one succeeds
         let feedback = null;
@@ -1086,6 +1133,7 @@ function App() {
                 // Pass sessions for progress comparison
                 feedback = await aiCoach.current.analyzeSpeech(
                     currentKey.key, // Pass the actual API key
+                    useBlob,        // Pass audio blob
                     transcriptData,
                     useDuration,
                     weekData,
@@ -1630,7 +1678,7 @@ function TrainingView({ currentDay, topicData, weekData, timer, isTimerRunning, 
             return;
         }
         console.log('🔄 Re-analyzing with saved recording:', lastRecording);
-        analyzeWithAI(lastRecording.transcript, lastRecording.timer);
+        analyzeWithAI(lastRecording.transcript, lastRecording.timer, lastRecording.audioBlob);
     }
 
 
@@ -2005,8 +2053,8 @@ function TrainingView({ currentDay, topicData, weekData, timer, isTimerRunning, 
                             {chatMessages.map((msg, idx) => (
                                 <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                     <div className={`max-w-2xl px-4 py-3 rounded-xl ${msg.role === 'user'
-                                            ? 'bg-purple-600 text-white'
-                                            : 'bg-gray-100 text-gray-800'
+                                        ? 'bg-purple-600 text-white'
+                                        : 'bg-gray-100 text-gray-800'
                                         }`}>
                                         {msg.role === 'user' ? (
                                             <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
