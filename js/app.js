@@ -1282,8 +1282,8 @@ function Dashboard({ currentDay, weekData, sessions, todayCompleted, setCurrentV
                 {todayCompleted ? (
                     <div className="text-center py-8">
                         <div className="text-6xl mb-4">🎉</div>
-                        <p className="text-lg text-gray-600 mb-4">ยอดเยี่ยม! คุณทำภารกิจวันนี้สำเร็จแล้ว</p>
-                        <p className="text-sm text-gray-500">กลับมาพรุ่งนี้เพื่อฝึกต่อ</p>
+                        <p className="text-lg text-gray-600 mb-2">ยอดเยี่ยม! คุณทำ <strong>Day {currentDay - 1}</strong> สำเร็จแล้ว</p>
+                        <p className="text-sm text-gray-500">กลับมาพรุ่งนี้เพื่อฝึก Day {currentDay} ต่อ 💪</p>
                     </div>
                 ) : (
                     <button
