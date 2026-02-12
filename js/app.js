@@ -683,17 +683,32 @@ function App() {
                 if (lastSession) {
                     // 1. Auto-advance using Math.max for safety
                     const maxCompletedDay = Math.max(...importedSessions.map(s => s.day));
+
+                    console.log('🔍 Import Debug:');
+                    console.log('- Sessions Count:', importedSessions.length);
+                    console.log('- Max Completed Day:', maxCompletedDay);
+                    console.log('- Original Current Day:', data.currentDay);
+                    console.log('- importedDay before:', importedDay);
+
                     if (maxCompletedDay >= importedDay) {
                         importedDay = maxCompletedDay + 1;
                     }
+
+                    console.log('- importedDay AFTER:', importedDay);
 
                     // 2. Cooldown Check
                     const lastDate = new Date(lastSession.date);
                     const today = new Date();
 
+                    console.log('- Last Session Date:', lastDate.toDateString());
+                    console.log('- Today:', today.toDateString());
+                    console.log('- Same Day?:', lastDate.toDateString() === today.toDateString());
+
                     if (lastDate.toDateString() === today.toDateString()) {
                         shouldLock = true;
                     }
+
+                    console.log('- Should Lock:', shouldLock);
                 }
 
                 setCurrentDay(importedDay);
