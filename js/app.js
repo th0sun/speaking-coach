@@ -771,13 +771,34 @@ function App() {
     const audioPlayer = useRef(null);
     const recordingStartTime = useRef(0);
 
+    // 0. Check for saved session on app startup
+    useEffect(() => {
+        const savedUser = localStorage.getItem('speakingCoach_user');
+        const savedUserData = localStorage.getItem('speakingCoach_userData');
+        
+        if (savedUser && savedUserData) {
+            try {
+                const user = JSON.parse(savedUser);
+                const userData = JSON.parse(savedUserData);
+                console.log('🔄 Restoring saved session for:', user.username);
+                handleLogin(user, userData);
+            } catch (err) {
+                console.error('❌ Failed to restore session:', err);
+                setIsAuthChecking(false);
+            }
+        } else {
+            setIsAuthChecking(false);
+        }
+    }, []);
+
     // 1. Load Data on Startup (or after Login)
     useEffect(() => {
         if (user) {
             // Already have data from login response, or can fetch fresh
             console.log('✅ User logged in:', user.username);
         } else {
-            // Check for existing session? (Optional: for now just show login)
+            // Already handled by session check above
+
             setIsAuthChecking(false);
         }
     }, [user]);
@@ -795,7 +816,7 @@ function App() {
             };
 
             try {
-                await fetch(`${CONFIG.BACKEND_URL} /api/save_data`, {
+                await fetch(`${CONFIG.BACKEND_URL}/api/save_data`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1560,6 +1581,11 @@ function App() {
 
     const handleLogin = (loggedInUser, userData) => {
         setUser(loggedInUser);
+        
+        // Save user info to localStorage for persistence
+        localStorage.setItem('speakingCoach_user', JSON.stringify(loggedInUser));
+        localStorage.setItem('speakingCoach_userData', JSON.stringify(userData));
+        
         if (userData) {
             if (userData.currentDay) setCurrentDay(userData.currentDay);
             if (userData.sessions) setSessions(userData.sessions);
@@ -1572,6 +1598,26 @@ function App() {
             }
         }
         setIsAuthChecking(false);
+    };
+
+    const handleLogout = () => {
+        // Clear user data from memory
+        setUser(null);
+        setSessions([]);
+        setCurrentDay(1);
+        setAchievements([]);
+        setApiKeys([]);
+        setActiveKeyId(null);
+        
+        // Clear localStorage
+        localStorage.removeItem('speakingCoach_user');
+        localStorage.removeItem('speakingCoach_userData');
+        localStorage.removeItem('speakingCoach_currentDay');
+        localStorage.removeItem('speakingCoach_sessions');
+        localStorage.removeItem('speakingCoach_achievements');
+        localStorage.removeItem('speakingCoach_apiKeys');
+        
+        console.log('👋 Logged out successfully');
     };
 
     if (isAuthChecking) {
@@ -1608,6 +1654,7 @@ function App() {
                                 🎯 Speaking Coach Pro
                             </h1>
                             <p className="text-gray-600">Zero to Hero in 30 Days</p>
+                            <p className="text-sm text-gray-500 mt-1">👤 {user.username}</p>
                             {apiKeys.length > 0 && (
                                 <div className="mt-2 ai-badge text-white text-xs px-3 py-1 rounded-full inline-block">
                                     ✨ AI-Powered
@@ -1617,6 +1664,13 @@ function App() {
                         <div className="text-right">
                             <div className="text-sm text-gray-500">Day</div>
                             <div className="text-3xl font-bold text-purple-600">{currentDay}/30</div>
+                            <button
+                                onClick={handleLogout}
+                                className="mt-3 px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-sm rounded-lg font-semibold transition"
+                                title="ออกจากระบบ"
+                            >
+                                🚪 ออกจากระบบ
+                            </button>
                         </div>
                     </div>
 
