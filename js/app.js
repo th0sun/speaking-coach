@@ -1382,31 +1382,31 @@ ${userMessage}
                     <div className="flex flex-wrap gap-2">
                         <button
                             onClick={() => setCurrentView('dashboard')}
-                            className={`px - 4 py - 2 rounded - lg font - semibold transition ${currentView === 'dashboard' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'} `}
+                            className={`px-4 py-2 rounded-lg font-semibold transition ${currentView === 'dashboard' ? 'bg-purple-600 text-white shadow-lg' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
                         >
                             📊 Dashboard
                         </button>
                         <button
                             onClick={() => setCurrentView('training')}
-                            className={`px - 4 py - 2 rounded - lg font - semibold transition ${currentView === 'training' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'} `}
+                            className={`px-4 py-2 rounded-lg font-semibold transition ${currentView === 'training' ? 'bg-purple-600 text-white shadow-lg' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
                         >
                             💪 ฝึกวันนี้
                         </button>
                         <button
                             onClick={() => setCurrentView('words')}
-                            className={`px - 4 py - 2 rounded - lg font - semibold transition ${currentView === 'words' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'} `}
+                            className={`px-4 py-2 rounded-lg font-semibold transition ${currentView === 'words' ? 'bg-purple-600 text-white shadow-lg' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
                         >
                             📚 Power Words
                         </button>
                         <button
                             onClick={() => setCurrentView('progress')}
-                            className={`px - 4 py - 2 rounded - lg font - semibold transition ${currentView === 'progress' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'} `}
+                            className={`px-4 py-2 rounded-lg font-semibold transition ${currentView === 'progress' ? 'bg-purple-600 text-white shadow-lg' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
                         >
                             📈 ความคืบหน้า
                         </button>
                         <button
                             onClick={() => setCurrentView('settings')}
-                            className={`px - 4 py - 2 rounded - lg font - semibold transition ${currentView === 'settings' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'} `}
+                            className={`px-4 py-2 rounded-lg font-semibold transition ${currentView === 'settings' ? 'bg-purple-600 text-white shadow-lg' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
                         >
                             ⚙️ ตั้งค่า
                         </button>
@@ -1968,27 +1968,62 @@ function TrainingView({ currentDay, topicData, weekData, timer, isTimerRunning, 
                         <span>💬</span> คุยกับ AI ต่อ
                     </h3>
 
-                    {chatMessages.length === 0 ? (
-                        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 mb-6">
-                            <p className="text-blue-700 text-sm mb-3">
-                                💡 ตัวอย่างคำถามที่คุณสามารถถาม:
+                    {/* Quick Chat Buttons */}
+                    {chatMessages.length === 0 && (
+                        <div className="mb-6">
+                            <p className="text-blue-700 text-sm mb-3 font-semibold">
+                                💡 คำถามด่วน (กดได้เลย):
                             </p>
-                            <ul className="text-sm text-gray-700 space-y-2">
-                                <li>• ทำไมคะแนน Pace ถึงต่ำ?</li>
-                                <li>• ช่วงไหนที่พูดดีสุด?</li>
-                                <li>• ควรพัฒนาอะไรก่อน?</li>
-                                <li>• มีแนวทางฝึกอะไรไหม?</li>
-                            </ul>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {[
+                                    "ช่วงไหนที่พูดดีที่สุด?",
+                                    "ทำไมคะแนน Fluency ถึงต่ำ?",
+                                    "ทำไมคะแนน Pace ถึงต่ำ?",
+                                    "ควรพัฒนาอะไรก่อน?",
+                                    "มีคำแนะนำเฉพาะเจาะจงไหม?",
+                                    "Dead Air เกิดตรงไหน?",
+                                    "ประโยคไหนที่ชัดเจนที่สุด?",
+                                    "มีแนวทางฝึกอย่างไรดี?"
+                                ].map((q, i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => {
+                                            setChatInput(q);
+                                            sendChatMessage(q);
+                                        }}
+                                        className="text-left px-4 py-3 bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-xl hover:border-purple-400 hover:shadow-md transition text-sm text-gray-700 font-medium"
+                                    >
+                                        {q}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                    ) : (
-                        <div className="space-y-4 mb-6  max-h-96 overflow-y-auto">
+                    )}
+
+                    {chatMessages.length > 0 && (
+                        <div className="space-y-4 mb-6 max-h-96 overflow-y-auto">
                             {chatMessages.map((msg, idx) => (
                                 <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`max-w-md px-4 py-3 rounded-xl ${msg.role === 'user'
-                                        ? 'bg-purple-600 text-white'
-                                        : 'bg-gray-100 text-gray-800'
+                                    <div className={`max-w-2xl px-4 py-3 rounded-xl ${msg.role === 'user'
+                                            ? 'bg-purple-600 text-white'
+                                            : 'bg-gray-100 text-gray-800'
                                         }`}>
-                                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                        {msg.role === 'user' ? (
+                                            <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                        ) : (
+                                            <div className="text-sm prose prose-sm max-w-none"
+                                                dangerouslySetInnerHTML={{
+                                                    __html: msg.content
+                                                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                                                        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                                                        .replace(/^#{1,6}\s+(.+)$/gm, (match, p1) => `<h3 class="font-bold mt-2 mb-1">${p1}</h3>`)
+                                                        .replace(/^-\s+(.+)$/gm, '<li class="ml-4">$1</li>')
+                                                        .replace(/^(\d+)\.\s+(.+)$/gm, '<li class="ml-4">$1. $2</li>')
+                                                        .replace(/\n\n/g, '<br/><br/>')
+                                                        .replace(/\n/g, '<br/>')
+                                                }}
+                                            />
+                                        )}
                                     </div>
                                 </div>
                             ))}
