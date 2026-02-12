@@ -1341,7 +1341,8 @@ function TrainingView({ currentDay, topicData, weekData, timer, isTimerRunning, 
             <div className="glass-effect rounded-3xl p-8 shadow-2xl text-center">
                 <div className="text-6xl mb-4">✅</div>
                 <h2 className="text-2xl font-bold text-gray-800 mb-2">เสร็จสิ้นแล้ว!</h2>
-                <p className="text-gray-600 mb-4">คุณได้ทำภารกิจวันที่ {currentDay} เรียบร้อยแล้ว</p>
+                <p className="text-gray-600 mb-4">คุณได้ทำภารกิจวันที่ {currentDay - 1} เรียบร้อยแล้ว</p>
+                <p className="text-sm text-gray-500">พรุ่งนี้กลับมาฝึก Day {currentDay} ต่อนะครับ 🚀</p>
             </div>
         );
     }
