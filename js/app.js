@@ -815,22 +815,43 @@ function App() {
                 settings: { apiKeys }
             };
 
-            try {
-                await fetch(`${CONFIG.BACKEND_URL}/api/save_data`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        user_id: user.id,
-                        data: dataToSave
-                    })
-                });
-                console.log('💾 Data saved to cloud');
-            } catch (err) {
-                console.error('❌ Failed to save data:', err);
+            let retries = 3;
+            while (retries > 0) {
+                try {
+                    const response = await fetch(`${CONFIG.BACKEND_URL}/api/save_data`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            user_id: user.id,
+                            data: dataToSave
+                        }),
+                        timeout: 10000
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Server error: ${response.status}`);
+                    }
+
+                    console.log('💾 Data saved to cloud ✅');
+                    // Also save to localStorage as backup
+                    localStorage.setItem('speakingCoach_userData', JSON.stringify(dataToSave));
+                    return;
+                } catch (err) {
+                    retries--;
+                    if (retries > 0) {
+                        console.warn(`⚠️ Save failed, retrying... (${retries} left)`);
+                        await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
+                    } else {
+                        console.error('❌ Failed to save data after 3 attempts:', err);
+                        // Save to localStorage as fallback
+                        localStorage.setItem('speakingCoach_backup', JSON.stringify(dataToSave));
+                        localStorage.setItem('speakingCoach_lastError', `Failed to sync at ${new Date().toLocaleString()}`);
+                    }
+                }
             }
         };
 
-        // Debounce save (wait 1s after last change)
+        // Debounce save (wait 1s after last change, then save every 5s)
         const timeoutId = setTimeout(saveData, 1000);
         return () => clearTimeout(timeoutId);
 

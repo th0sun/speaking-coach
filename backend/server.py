@@ -25,6 +25,21 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.0-flash')
 GEMINI_API_BASE = f'https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent'
 
+# Database configuration
+DATABASE_URL = os.getenv('DATABASE_URL')
+USE_POSTGRES = DATABASE_URL is not None and 'postgresql' in DATABASE_URL.lower()
+
+if USE_POSTGRES:
+    try:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        logger.info('✅ PostgreSQL mode enabled')
+    except ImportError:
+        logger.warning('⚠️ psycopg2 not installed, falling back to SQLite')
+        USE_POSTGRES = False
+
+DB_NAME = "speaking_coach.db"
+
 @app.route('/api/health', methods=['GET'])
 def health():
     """Health check endpoint - verify API key is set"""
@@ -154,21 +169,38 @@ def analyze():
 DB_NAME = "speaking_coach.db"
 
 def init_db():
-    """Initialize the database with users table"""
+    """Initialize the database with users table (PostgreSQL or SQLite)"""
     try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                pin TEXT NOT NULL,
-                data TEXT
-            )
-        ''')
-        conn.commit()
-        conn.close()
-        logger.info(f"✅ Database initialized: {DB_NAME}")
+        if USE_POSTGRES:
+            conn = psycopg2.connect(DATABASE_URL)
+            c = conn.cursor()
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    username TEXT UNIQUE NOT NULL,
+                    pin TEXT NOT NULL,
+                    data TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            conn.commit()
+            conn.close()
+            logger.info(f"✅ PostgreSQL database initialized")
+        else:
+            conn = sqlite3.connect(DB_NAME)
+            c = conn.cursor()
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE NOT NULL,
+                    pin TEXT NOT NULL,
+                    data TEXT
+                )
+            ''')
+            conn.commit()
+            conn.close()
+            logger.info(f"✅ SQLite database initialized: {DB_NAME}")
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
 
@@ -188,8 +220,6 @@ def register():
         return jsonify({'error': 'PIN must be 6 digits'}), 400
 
     try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
         # Initialize with empty data structure
         initial_data = json.dumps({
             'currentDay': 1,
@@ -197,14 +227,30 @@ def register():
             'achievements': [],
             'settings': {'apiKeys': []}
         })
-        c.execute("INSERT INTO users (username, pin, data) VALUES (?, ?, ?)", (username, pin, initial_data))
-        conn.commit()
-        user_id = c.lastrowid
-        conn.close()
+        
+        if USE_POSTGRES:
+            conn = psycopg2.connect(DATABASE_URL)
+            c = conn.cursor()
+            c.execute("INSERT INTO users (username, pin, data) VALUES (%s, %s, %s) RETURNING id", 
+                     (username, pin, initial_data))
+            user_id = c.fetchone()[0]
+            conn.commit()
+            conn.close()
+        else:
+            conn = sqlite3.connect(DB_NAME)
+            c = conn.cursor()
+            c.execute("INSERT INTO users (username, pin, data) VALUES (?, ?, ?)", 
+                     (username, pin, initial_data))
+            conn.commit()
+            user_id = c.lastrowid
+            conn.close()
+        
+        logger.info(f"✅ User registered: {username}")
         return jsonify({'message': 'Registration successful', 'user_id': user_id, 'username': username}), 201
-    except sqlite3.IntegrityError:
-        return jsonify({'error': 'Username already exists'}), 409
     except Exception as e:
+        logger.error(f"❌ Registration error: {e}")
+        if 'duplicate' in str(e).lower() or 'unique' in str(e).lower():
+            return jsonify({'error': 'Username already exists'}), 409
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/login', methods=['POST'])
@@ -217,13 +263,21 @@ def login():
         return jsonify({'error': 'Username and PIN are required'}), 400
 
     try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute("SELECT id, username, data FROM users WHERE username = ? AND pin = ?", (username, pin))
-        user = c.fetchone()
-        conn.close()
+        if USE_POSTGRES:
+            conn = psycopg2.connect(DATABASE_URL)
+            c = conn.cursor()
+            c.execute("SELECT id, username, data FROM users WHERE username = %s AND pin = %s", (username, pin))
+            user = c.fetchone()
+            conn.close()
+        else:
+            conn = sqlite3.connect(DB_NAME)
+            c = conn.cursor()
+            c.execute("SELECT id, username, data FROM users WHERE username = ? AND pin = ?", (username, pin))
+            user = c.fetchone()
+            conn.close()
 
         if user:
+            logger.info(f"✅ User logged in: {username}")
             return jsonify({
                 'message': 'Login successful',
                 'user': {
@@ -233,8 +287,10 @@ def login():
                 'data': json.loads(user[2]) if user[2] else {}
             }), 200
         else:
+            logger.warning(f"❌ Failed login attempt for: {username}")
             return jsonify({'error': 'Invalid username or PIN'}), 401
     except Exception as e:
+        logger.error(f"Login error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/save_data', methods=['POST'])
@@ -247,13 +303,24 @@ def save_data():
         return jsonify({'error': 'User ID and Data are required'}), 400
 
     try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute("UPDATE users SET data = ? WHERE id = ?", (json.dumps(user_data), user_id))
-        conn.commit()
-        conn.close()
+        if USE_POSTGRES:
+            conn = psycopg2.connect(DATABASE_URL)
+            c = conn.cursor()
+            c.execute("UPDATE users SET data = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", 
+                     (json.dumps(user_data), user_id))
+            conn.commit()
+            conn.close()
+        else:
+            conn = sqlite3.connect(DB_NAME)
+            c = conn.cursor()
+            c.execute("UPDATE users SET data = ? WHERE id = ?", (json.dumps(user_data), user_id))
+            conn.commit()
+            conn.close()
+        
+        logger.info(f"💾 Data saved for user {user_id}")
         return jsonify({'message': 'Data saved successfully'}), 200
     except Exception as e:
+        logger.error(f"❌ Save error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/get_data', methods=['GET'])
@@ -264,17 +331,26 @@ def get_data():
         return jsonify({'error': 'User ID is required'}), 400
 
     try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute("SELECT data FROM users WHERE id = ?", (user_id,))
-        result = c.fetchone()
-        conn.close()
+        if USE_POSTGRES:
+            conn = psycopg2.connect(DATABASE_URL)
+            c = conn.cursor()
+            c.execute("SELECT data FROM users WHERE id = %s", (user_id,))
+            result = c.fetchone()
+            conn.close()
+        else:
+            conn = sqlite3.connect(DB_NAME)
+            c = conn.cursor()
+            c.execute("SELECT data FROM users WHERE id = ?", (user_id,))
+            result = c.fetchone()
+            conn.close()
 
         if result:
             return jsonify({'data': json.loads(result[0]) if result[0] else {}}), 200
         else:
+            logger.warning(f"User not found: {user_id}")
             return jsonify({'error': 'User not found'}), 404
     except Exception as e:
+        logger.error(f"Get data error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/config', methods=['GET'])
@@ -294,6 +370,10 @@ if __name__ == '__main__':
         logger.info(f'✅ API Key loaded: {GEMINI_API_KEY[:10]}...')
     
     logger.info(f'✅ Model: {GEMINI_MODEL}')
+    logger.info(f'📊 Database: {"PostgreSQL (Render)" if USE_POSTGRES else "SQLite (Local)"}')
+    
+    if USE_POSTGRES:
+        logger.info(f'✅ PostgreSQL connection ready for persistent global data')
     
     port = int(os.environ.get("PORT", 5001))
     logger.info(f'🚀 Starting Flask server on port {port}')
