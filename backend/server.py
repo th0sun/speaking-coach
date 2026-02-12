@@ -7,6 +7,7 @@ import logging
 import base64
 import sqlite3
 import json
+import sys
 
 # Load environment variables
 load_dotenv()
@@ -374,7 +375,17 @@ if __name__ == '__main__':
     
     if USE_POSTGRES:
         logger.info('✅ PostgreSQL connection ready for persistent global data')
+    else:
+        logger.info('💾 Using SQLite (local development or fallback mode)')
     
     port = int(os.environ.get("PORT", 5001))
-    logger.info(f'🚀 Starting Flask server on port {port}')
-    app.run(host='0.0.0.0', port=port)
+    host = os.environ.get("HOST", "0.0.0.0")
+    
+    logger.info(f'🚀 Starting Flask server on {host}:{port}')
+    
+    try:
+        app.run(host=host, port=port, debug=False)
+    except Exception as e:
+        logger.error(f'❌ Failed to start server: {e}')
+        sys.exit(1)
+
