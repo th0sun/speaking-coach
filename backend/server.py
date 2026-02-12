@@ -32,7 +32,7 @@ USE_POSTGRES = DATABASE_URL is not None and 'postgresql' in DATABASE_URL.lower()
 psycopg2 = None
 if USE_POSTGRES:
     try:
-        import psycopg2
+        import psycopg2  # type: ignore
         logger.info('✅ PostgreSQL mode enabled')
     except ImportError:
         logger.warning('⚠️ psycopg2 not installed, falling back to SQLite')
