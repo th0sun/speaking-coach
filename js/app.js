@@ -300,7 +300,7 @@ class AICoach {
         this.backendURL = CONFIG.BACKEND_URL;
     }
 
-    async analyzeSpeech(transcript, duration, weekData, topicData, sessions = []) {
+    async analyzeSpeech(apiKey, transcript, duration, weekData, topicData, sessions = []) {
         // Handle transcript properly with TIMING information
         let transcriptText = '';
         let timingInfo = '';
@@ -491,18 +491,31 @@ ${sessions && sessions.length > 0 ? `
 ` : '- นี่เป็นครั้งแรก ให้วิเคราะห์เชิงลึกเพื่อเป็นพื้นฐานการเปรียบเทียบครั้งต่อไป'}`;
 
         try {
-            console.log('🤖 Calling backend API at:', `${this.backendURL}/api/analyze`);
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${CONFIG.GEMINI_MODEL}:generateContent?key=${apiKey}`;
+            console.log('🤖 Calling Gemini API directly...');
 
-            const response = await fetch(`${this.backendURL}/api/analyze`, {
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: prompt })
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{ text: prompt }]
+                    }]
+                })
             });
 
             if (!response.ok) {
-                console.error('❌ Backend API Error:', response.status, response.statusText);
+                console.error('❌ Gemini API Error:', response.status, response.statusText);
                 const errorData = await response.json();
                 console.error('Error details:', errorData);
+
+                if (response.status === 404) {
+                    alert('⚠️ ไม่พบ Model นี้ (404) - กรุณาตรวจสอบชื่อโมเดลใน config.js');
+                } else if (response.status === 429) {
+                    alert('⚠️ โควตาการใช้งานเต็ม (429) - กรุณารอสักครู่แล้วลองใหม่');
+                } else {
+                    alert(`เกิดข้อผิดพลาดในการเรียก AI (${response.status}): เช็ค API Key อีกครั้ง`);
+                }
                 return null;
             }
 
@@ -524,7 +537,7 @@ ${sessions && sessions.length > 0 ? `
             return null;
         } catch (error) {
             console.error('❌ AI Analysis Error:', error);
-            console.error('💡 Make sure backend is running: ./start_backend.sh');
+            alert('เกิดข้อผิดพลาดในการเชื่อมต่อกับ AI');
             return null;
         }
     }
@@ -829,11 +842,12 @@ function App() {
 
         // Pass sessions for progress comparison
         const feedback = await aiCoach.current.analyzeSpeech(
+            apiKey, // Pass API Key
             transcriptData,
             timer,
             weekData,
             topicData,
-            sessions  // ← เพิ่ม sessions เพื่อเปรียบเทียบความก้าวหน้า
+            sessions  // เพิ่ม sessions เพื่อเปรียบเทียบความก้าวหน้า
         );
 
         console.log('✅ AI analysis complete:', feedback);
