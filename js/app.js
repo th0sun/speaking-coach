@@ -1367,7 +1367,7 @@ ${userMessage}
                                 🎯 Speaking Coach Pro
                             </h1>
                             <p className="text-gray-600">Zero to Hero in 30 Days</p>
-                            {apiKey && (
+                            {apiKeys.length > 0 && (
                                 <div className="mt-2 ai-badge text-white text-xs px-3 py-1 rounded-full inline-block">
                                     ✨ AI-Powered
                                 </div>
