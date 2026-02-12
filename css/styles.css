@@ -1,0 +1,83 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;600;700;800&display=swap');
+
+body {
+    font-family: 'Noto Sans Thai', sans-serif;
+}
+
+.gradient-bg {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.glass-effect {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.timer-display {
+    font-family: 'Courier New', monospace;
+    font-size: 3.5rem;
+    font-weight: bold;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+@keyframes pulse-ring {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    100% {
+        transform: scale(1.5);
+        opacity: 0;
+    }
+}
+
+.recording-indicator {
+    position: relative;
+}
+
+.recording-indicator::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    background: #ef4444;
+    border-radius: 50%;
+    animation: pulse-ring 1.5s infinite;
+}
+
+.ai-badge {
+    background: linear-gradient(135deg, #a78bfa 0%, #ec4899 100%);
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.8;
+    }
+}
+
+.achievement-pop {
+    animation: popIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes popIn {
+    0% {
+        transform: scale(0);
+        opacity: 0;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}

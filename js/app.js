@@ -1,0 +1,1946 @@
+const { useState, useEffect, useRef } = React;
+
+// ข้อมูลหลักสูตร (เหมือนเดิม แต่เพิ่มเติม AI criteria)
+const TRAINING_DATA = {
+    week1: {
+        name: "SURVIVAL MODE",
+        goal: "แก้ Dead Air + สร้างความคล่อง",
+        aiCriteria: {
+            fluency: 40,
+            clarity: 30,
+            structure: 10,
+            engagement: 20
+        },
+        powerWords: [
+            {
+                day: 1, words: [
+                    { word: "กรอบความคิด", meaning: "โครงสร้างการคิด/แนวทาง", example: "กรอบความคิดที่ผมใช้คือ..." },
+                    { word: "มุมมอง", meaning: "ทัศนคติ/มุมมองในการมองสิ่งต่างๆ", example: "ถ้ามองในมุมมองอื่น อาจเห็นว่า..." },
+                    { word: "บริบท", meaning: "สถานการณ์โดยรอบ", example: "ในบริบทของสังคมไทย..." }
+                ]
+            },
+            {
+                day: 2, words: [
+                    { word: "กรอบความคิด", meaning: "โครงสร้างการคิด/แนวทาง", example: "กรอบความคิดที่ผมใช้คือ..." },
+                    { word: "มุมมอง", meaning: "ทัศนคติ/มุมมองในการมองสิ่งต่างๆ", example: "ถ้ามองในมุมมองอื่น อาจเห็นว่า..." },
+                    { word: "บริบท", meaning: "สถานการณ์โดยรอบ", example: "ในบริบทของสังคมไทย..." }
+                ]
+            },
+            {
+                day: 3, words: [
+                    { word: "หลักการ", meaning: "ทฤษฎีพื้นฐาน", example: "หลักการสำคัญคือ..." },
+                    { word: "แก่นแท้", meaning: "สาระสำคัญ", example: "แก่นแท้ของเรื่องนี้คือ..." },
+                    { word: "นัยสำคัญ", meaning: "ผลกระทบที่ตามมา", example: "นัยสำคัญของเรื่องนี้คือ..." }
+                ]
+            },
+            {
+                day: 4, words: [
+                    { word: "หลักการ", meaning: "ทฤษฎีพื้นฐาน", example: "หลักการสำคัญคือ..." },
+                    { word: "แก่นแท้", meaning: "สาระสำคัญ", example: "แก่นแท้ของเรื่องนี้คือ..." },
+                    { word: "นัยสำคัญ", meaning: "ผลกระทบที่ตามมา", example: "นัยสำคัญของเรื่องนี้คือ..." }
+                ]
+            },
+            {
+                day: 5, words: [
+                    { word: "กลไก", meaning: "วิธีการทำงาน", example: "กลไกที่ทำให้เกิดคือ..." },
+                    { word: "ปัจจัย", meaning: "สิ่งที่มีผลต่อ", example: "ปัจจัยสำคัญมี 3 ข้อ..." },
+                    { word: "แนวโน้ม", meaning: "ทิศทางในอนาคต", example: "แนวโน้มที่น่าสนใจคือ..." }
+                ]
+            },
+            {
+                day: 6, words: [
+                    { word: "กลไก", meaning: "วิธีการทำงาน", example: "กลไกที่ทำให้เกิดคือ..." },
+                    { word: "ปัจจัย", meaning: "สิ่งที่มีผลต่อ", example: "ปัจจัยสำคัญมี 3 ข้อ..." },
+                    { word: "แนวโน้ม", meaning: "ทิศทางในอนาคต", example: "แนวโน้มที่น่าสนใจคือ..." }
+                ]
+            },
+            {
+                day: 7, words: [
+                    { word: "กลไก", meaning: "วิธีการทำงาน", example: "กลไกที่ทำให้เกิดคือ..." },
+                    { word: "ปัจจัย", meaning: "สิ่งที่มีผลต่อ", example: "ปัจจัยสำคัญมี 3 ข้อ..." },
+                    { word: "แนวโน้ม", meaning: "ทิศทางในอนาคต", example: "แนวโน้มที่น่าสนใจคือ..." }
+                ]
+            }
+        ],
+        topics: [
+            { day: 1, title: "Mirror Talk", desc: "แนะนำตัวเอง 1 นาที ไม่หยุด", duration: 1, type: "basic" },
+            { day: 2, title: "Mirror Talk", desc: "แนะนำตัวเอง 1 นาที ไม่หยุด", duration: 1, type: "basic" },
+            { day: 3, title: "Object Description", desc: "อธิบายของในมือ 2 นาที", duration: 2, type: "basic" },
+            { day: 4, title: "Object Description", desc: "อธิบายของในมือ 2 นาที", duration: 2, type: "basic" },
+            { day: 5, title: "Free Flow", desc: "พูดเรื่องอะไรก็ได้ 2 นาที", duration: 2, type: "challenge" },
+            { day: 6, title: "Phone Recording", desc: "อัดเสียง พูดเรื่องวันนี้ 2 นาที", duration: 2, type: "challenge" },
+            { day: 7, title: "MINI CHALLENGE", desc: "หน้ากล้อง: ทำไมฉันอยากเก่งพูด", duration: 2, type: "challenge" }
+        ]
+    },
+    week2: {
+        name: "STRUCTURE MODE",
+        goal: "พูดแบบมีระบบ ใช้ Framework",
+        aiCriteria: {
+            fluency: 25,
+            clarity: 25,
+            structure: 35,
+            engagement: 15
+        },
+        powerWords: [
+            {
+                day: 8, words: [
+                    { word: "First Principles", meaning: "คิดจากหลักการพื้นฐาน", example: "ถ้าคิดตาม First Principles..." },
+                    { word: "Trade-off", meaning: "แลกเปลี่ยน ได้อย่างเสียอย่าง", example: "Trade-off ของการเลือกนี้คือ..." },
+                    { word: "Second-Order Effect", meaning: "ผลกระทบระดับ 2-3", example: "ผลกระทบระดับที่สองคือ..." }
+                ]
+            },
+            {
+                day: 9, words: [
+                    { word: "First Principles", meaning: "คิดจากหลักการพื้นฐาน", example: "ถ้าคิดตาม First Principles..." },
+                    { word: "Trade-off", meaning: "แลกเปลี่ยน ได้อย่างเสียอย่าง", example: "Trade-off ของการเลือกนี้คือ..." },
+                    { word: "Second-Order Effect", meaning: "ผลกระทบระดับ 2-3", example: "ผลกระทบระดับที่สองคือ..." }
+                ]
+            },
+            {
+                day: 10, words: [
+                    { word: "First Principles", meaning: "คิดจากหลักการพื้นฐาน", example: "ถ้าคิดตาม First Principles..." },
+                    { word: "Trade-off", meaning: "แลกเปลี่ยน ได้อย่างเสียอย่าง", example: "Trade-off ของการเลือกนี้คือ..." },
+                    { word: "Second-Order Effect", meaning: "ผลกระทบระดับ 2-3", example: "ผลกระทบระดับที่สองคือ..." }
+                ]
+            },
+            {
+                day: 11, words: [
+                    { word: "Feedback Loop", meaning: "วงจรย้อนกลับ", example: "นี่คือ Feedback Loop ที่..." },
+                    { word: "Asymmetry", meaning: "ความไม่สมดุล", example: "ความไม่สมดุลที่เห็นได้ชัดคือ..." },
+                    { word: "Leverage", meaning: "คันโยก/จุดทรงพลัง", example: "Leverage point ที่สำคัญคือ..." }
+                ]
+            },
+            {
+                day: 12, words: [
+                    { word: "Feedback Loop", meaning: "วงจรย้อนกลับ", example: "นี่คือ Feedback Loop ที่..." },
+                    { word: "Asymmetry", meaning: "ความไม่สมดุล", example: "ความไม่สมดุลที่เห็นได้ชัดคือ..." },
+                    { word: "Leverage", meaning: "คันโยก/จุดทรงพลัง", example: "Leverage point ที่สำคัญคือ..." }
+                ]
+            },
+            {
+                day: 13, words: [
+                    { word: "Feedback Loop", meaning: "วงจรย้อนกลับ", example: "นี่คือ Feedback Loop ที่..." },
+                    { word: "Asymmetry", meaning: "ความไม่สมดุล", example: "ความไม่สมดุลที่เห็นได้ชัดคือ..." },
+                    { word: "Leverage", meaning: "คันโยก/จุดทรงพลัง", example: "Leverage point ที่สำคัญคือ..." }
+                ]
+            },
+            {
+                day: 14, words: [
+                    { word: "Feedback Loop", meaning: "วงจรย้อนกลับ", example: "นี่คือ Feedback Loop ที่..." },
+                    { word: "Asymmetry", meaning: "ความไม่สมดุล", example: "ความไม่สมดุลที่เห็นได้ชัดคือ..." },
+                    { word: "Leverage", meaning: "คันโยก/จุดทรงพลัง", example: "Leverage point ที่สำคัญคือ..." }
+                ]
+            }
+        ],
+        topics: [
+            { day: 8, title: "PREP: ทำไมคนควรออกกำลังกาย", desc: "ใช้ PREP Framework", duration: 3, framework: "PREP" },
+            { day: 9, title: "PREP: ทำไมควรอ่านหนังสือ", desc: "ใช้ PREP Framework", duration: 3, framework: "PREP" },
+            { day: 10, title: "3-Act: ประสบการณ์ที่ทำให้คุณเปลี่ยน", desc: "ใช้ 3-Act Structure", duration: 3, framework: "3-Act" },
+            { day: 11, title: "3-Act: ความผิดพลาดที่ใหญ่ที่สุด", desc: "ใช้ 3-Act Structure", duration: 3, framework: "3-Act" },
+            { day: 12, title: "SBI: ปัญหาที่เจอ + วิธีแก้", desc: "ใช้ SBI Framework", duration: 3, framework: "SBI" },
+            { day: 13, title: "SBI: โปรเจกต์ที่ภูมิใจ", desc: "ใช้ SBI Framework", duration: 3, framework: "SBI" },
+            { day: 14, title: "WEEKLY CHALLENGE", desc: "พูด 3 นาที ใช้ PREP", duration: 3, type: "challenge" }
+        ]
+    },
+    week3: {
+        name: "STORYTELLING MODE",
+        goal: "ทำให้คนอยากฟัง มีอารมณ์",
+        aiCriteria: {
+            fluency: 20,
+            clarity: 20,
+            structure: 25,
+            engagement: 35
+        },
+        powerWords: [
+            {
+                day: 15, words: [
+                    { word: "ย้อนกลับไป...", meaning: "เริ่มเล่าเรื่อง", example: "ย้อนกลับไปเมื่อ 5 ปีก่อน..." },
+                    { word: "สิ่งที่น่าสนใจคือ...", meaning: "ดึงดูดความสนใจ", example: "สิ่งที่น่าสนใจคือผมไม่คิดว่า..." },
+                    { word: "ที่แปลกคือ...", meaning: "สร้าง Curiosity", example: "ที่แปลกคือทุกคนคิดว่า..." }
+                ]
+            },
+            {
+                day: 16, words: [
+                    { word: "ย้อนกลับไป...", meaning: "เริ่มเล่าเรื่อง", example: "ย้อนกลับไปเมื่อ 5 ปีก่อน..." },
+                    { word: "สิ่งที่น่าสนใจคือ...", meaning: "ดึงดูดความสนใจ", example: "สิ่งที่น่าสนใจคือผมไม่คิดว่า..." },
+                    { word: "ที่แปลกคือ...", meaning: "สร้าง Curiosity", example: "ที่แปลกคือทุกคนคิดว่า..." }
+                ]
+            },
+            {
+                day: 17, words: [
+                    { word: "ย้อนกลับไป...", meaning: "เริ่มเล่าเรื่อง", example: "ย้อนกลับไปเมื่อ 5 ปีก่อน..." },
+                    { word: "สิ่งที่น่าสนใจคือ...", meaning: "ดึงดูดความสนใจ", example: "สิ่งที่น่าสนใจคือผมไม่คิดว่า..." },
+                    { word: "ที่แปลกคือ...", meaning: "สร้าง Curiosity", example: "ที่แปลกคือทุกคนคิดว่า..." }
+                ]
+            },
+            {
+                day: 18, words: [
+                    { word: "ถ้าให้เปรียบเทียบ...", meaning: "ใช้ Metaphor", example: "ถ้าให้เปรียบเทียบก็เหมือน..." },
+                    { word: "ประเด็นก็คือ...", meaning: "ไปหาจุดสำคัญ", example: "ประเด็นก็คือเราต้อง..." },
+                    { word: "แต่ความจริงคือ...", meaning: "Plot Twist", example: "แต่ความจริงคือไม่ใช่อย่างนั้น..." }
+                ]
+            },
+            {
+                day: 19, words: [
+                    { word: "ถ้าให้เปรียบเทียบ...", meaning: "ใช้ Metaphor", example: "ถ้าให้เปรียบเทียบก็เหมือน..." },
+                    { word: "ประเด็นก็คือ...", meaning: "ไปหาจุดสำคัญ", example: "ประเด็นก็คือเราต้อง..." },
+                    { word: "แต่ความจริงคือ...", meaning: "Plot Twist", example: "แต่ความจริงคือไม่ใช่อย่างนั้น..." }
+                ]
+            },
+            {
+                day: 20, words: [
+                    { word: "ถ้าให้เปรียบเทียบ...", meaning: "ใช้ Metaphor", example: "ถ้าให้เปรียบเทียบก็เหมือน..." },
+                    { word: "ประเด็นก็คือ...", meaning: "ไปหาจุดสำคัญ", example: "ประเด็นก็คือเราต้อง..." },
+                    { word: "แต่ความจริงคือ...", meaning: "Plot Twist", example: "แต่ความจริงคือไม่ใช่อย่างนั้น..." }
+                ]
+            },
+            {
+                day: 21, words: [
+                    { word: "ถ้าให้เปรียบเทียบ...", meaning: "ใช้ Metaphor", example: "ถ้าให้เปรียบเทียบก็เหมือน..." },
+                    { word: "ประเด็นก็คือ...", meaning: "ไปหาจุดสำคัญ", example: "ประเด็นก็คือเราต้อง..." },
+                    { word: "แต่ความจริงคือ...", meaning: "Plot Twist", example: "แต่ความจริงคือไม่ใช่อย่างนั้น..." }
+                ]
+            }
+        ],
+        topics: [
+            { day: 15, title: "Hook Practice", desc: "เปิดเรื่องให้ปัง: ชีวิตของผม", duration: 3, technique: "Hook" },
+            { day: 16, title: "Hook Practice", desc: "เปิดเรื่องให้ปัง: สิ่งที่คนไม่รู้เกี่ยวกับผม", duration: 3, technique: "Hook" },
+            { day: 17, title: "Emotion: Excited", desc: "เล่าเรื่องด้วยความตื่นเต้น", duration: 3, technique: "Emotion" },
+            { day: 18, title: "Emotion: Thoughtful", desc: "เล่าเรื่องด้วยความใคร่คิด", duration: 3, technique: "Emotion" },
+            { day: 19, title: "Pause & Pace", desc: "ใช้จังหวะ: บทเรียนสำคัญ", duration: 4, technique: "Timing" },
+            { day: 20, title: "Pause & Pace", desc: "ใช้จังหวะ: เรื่องที่รู้สึกภูมิใจ", duration: 4, technique: "Timing" },
+            { day: 21, title: "WEEKLY CHALLENGE", desc: "เล่าเรื่อง: บทเรียนชีวิต", duration: 4, type: "challenge" }
+        ]
+    },
+    week4: {
+        name: "CHARISMA MODE",
+        goal: "มั่นใจ มีพลัง พร้อมลงคอนเทนต์จริง",
+        aiCriteria: {
+            fluency: 20,
+            clarity: 20,
+            structure: 20,
+            engagement: 40
+        },
+        powerWords: [
+            {
+                day: 22, words: [
+                    { word: "คุณเคยสงสัยไหมว่า...", meaning: "Rhetorical Question", example: "คุณเคยสงสัยไหมว่าทำไม..." },
+                    { word: "มี 3 สิ่ง...", meaning: "Power of Three", example: "มี 3 สิ่งที่สำคัญ: 1) 2) 3)" },
+                    { word: "ไม่ใช่... แต่เป็น...", meaning: "Contrast", example: "ไม่ใช่เรื่องของ... แต่เป็นเรื่องของ..." }
+                ]
+            },
+            {
+                day: 23, words: [
+                    { word: "คุณเคยสงสัยไหมว่า...", meaning: "Rhetorical Question", example: "คุณเคยสงสัยไหมว่าทำไม..." },
+                    { word: "มี 3 สิ่ง...", meaning: "Power of Three", example: "มี 3 สิ่งที่สำคัญ: 1) 2) 3)" },
+                    { word: "ไม่ใช่... แต่เป็น...", meaning: "Contrast", example: "ไม่ใช่เรื่องของ... แต่เป็นเรื่องของ..." }
+                ]
+            },
+            {
+                day: 24, words: [
+                    { word: "คุณเคยสงสัยไหมว่า...", meaning: "Rhetorical Question", example: "คุณเคยสงสัยไหมว่าทำไม..." },
+                    { word: "มี 3 สิ่ง...", meaning: "Power of Three", example: "มี 3 สิ่งที่สำคัญ: 1) 2) 3)" },
+                    { word: "ไม่ใช่... แต่เป็น...", meaning: "Contrast", example: "ไม่ใช่เรื่องของ... แต่เป็นเรื่องของ..." }
+                ]
+            },
+            {
+                day: 25, words: [
+                    { word: "สิ่งที่ผมเรียนรู้คือ...", meaning: "Personal Insight", example: "สิ่งที่ผมเรียนรู้คือ..." },
+                    { word: "ลองคิดดูว่า...", meaning: "Call to Action", example: "ลองคิดดูว่าถ้า..." },
+                    { word: "สุดท้ายแล้ว...", meaning: "Conclusion", example: "สุดท้ายแล้วมันก็คือ..." }
+                ]
+            },
+            {
+                day: 26, words: [
+                    { word: "สิ่งที่ผมเรียนรู้คือ...", meaning: "Personal Insight", example: "สิ่งที่ผมเรียนรู้คือ..." },
+                    { word: "ลองคิดดูว่า...", meaning: "Call to Action", example: "ลองคิดดูว่าถ้า..." },
+                    { word: "สุดท้ายแล้ว...", meaning: "Conclusion", example: "สุดท้ายแล้วมันก็คือ..." }
+                ]
+            },
+            {
+                day: 27, words: [
+                    { word: "สิ่งที่ผมเรียนรู้คือ...", meaning: "Personal Insight", example: "สิ่งที่ผมเรียนรู้คือ..." },
+                    { word: "ลองคิดดูว่า...", meaning: "Call to Action", example: "ลองคิดดูว่าถ้า..." },
+                    { word: "สุดท้ายแล้ว...", meaning: "Conclusion", example: "สุดท้ายแล้วมันก็คือ..." }
+                ]
+            },
+            {
+                day: 28, words: [
+                    { word: "[สร้างวลีประจำตัว]", meaning: "Signature Phrase", example: "สร้างวลีที่เป็นเอกลักษณ์ของคุณ" }
+                ]
+            },
+            {
+                day: 29, words: [
+                    { word: "[สร้างวลีประจำตัว]", meaning: "Signature Phrase", example: "สร้างวลีที่เป็นเอกลักษณ์ของคุณ" }
+                ]
+            },
+            {
+                day: 30, words: [
+                    { word: "[สร้างวลีประจำตัว]", meaning: "Signature Phrase", example: "สร้างวลีที่เป็นเอกลักษณ์ของคุณ" }
+                ]
+            }
+        ],
+        topics: [
+            { day: 22, title: "Camera Confidence", desc: "พูดดูตรงกล้อง: แนะนำตัวแบบมืออาชีพ", duration: 5, focus: "Eye Contact" },
+            { day: 23, title: "Camera Confidence", desc: "พูดดูตรงกล้อง: ทำไมควรติดตามคุณ", duration: 5, focus: "Body Language" },
+            { day: 24, title: "Energy Level 7/10", desc: "พูดด้วยพลังระดับสูง", duration: 5, focus: "Energy" },
+            { day: 25, title: "Energy Level 9/10", desc: "พูดด้วยพลังเต็มที่", duration: 5, focus: "Energy" },
+            { day: 26, title: "Style Test: Casual", desc: "ทดลองสไตล์แบบสบายๆ", duration: 5, focus: "Style" },
+            { day: 27, title: "Style Test: Professional", desc: "ทดลองสไตล์แบบมืออาชีพ", duration: 5, focus: "Style" },
+            { day: 28, title: "CONTENT CREATION", desc: "สร้างคอนเทนต์จริง 5 นาที", duration: 5, type: "challenge" },
+            { day: 29, title: "CONTENT CREATION", desc: "สร้างคอนเทนต์จริง (ปรับปรุง)", duration: 5, type: "challenge" },
+            { day: 30, title: "🎯 FINAL BOSS", desc: "ลงคอนเทนต์จริง / Go Live!", duration: 10, type: "final" }
+        ]
+    }
+};
+
+// AI Coach System (Now uses backend API)
+class AICoach {
+    constructor() {
+        this.backendURL = CONFIG.BACKEND_URL;
+    }
+
+    async analyzeSpeech(transcript, duration, weekData, topicData, sessions = []) {
+        // Handle transcript properly with TIMING information
+        let transcriptText = '';
+        let timingInfo = '';
+        let pauseAnalysis = '';;
+
+        if (!transcript || (Array.isArray(transcript) && transcript.length === 0)) {
+            transcriptText = '[ไม่มี transcript - Speech Recognition อาจไม่ทำงาน]';
+            console.warn('⚠️ No transcript available for AI analysis');
+        } else if (Array.isArray(transcript)) {
+            // Build transcript with timing + pause detection
+            const segments = [];
+            const pauses = [];
+
+            transcript.forEach((seg, index) => {
+                const startSec = seg.startTime?.toFixed(1) || '0.0';
+                const endSec = seg.endTime?.toFixed(1) || '0.0';
+
+                // Add segment with timestamp
+                segments.push(`[${startSec}s-${endSec}s] ${seg.text}`);
+
+                // Detect pause before next segment
+                if (index < transcript.length - 1) {
+                    const nextSeg = transcript[index + 1];
+                    const pauseDuration = (nextSeg.startTime || 0) - (seg.endTime || 0);
+
+                    if (pauseDuration > 0.5) { // Pause > 0.5 วินาที
+                        pauses.push({
+                            after: seg.text.substring(0, 30) + '...',
+                            duration: pauseDuration.toFixed(1),
+                            position: `${endSec}s`
+                        });
+                        segments.push(`[PAUSE ${pauseDuration.toFixed(1)}s]`);
+                    }
+                }
+            });
+
+            transcriptText = segments.join('\n');
+
+            // Summary of pauses
+            if (pauses.length > 0) {
+                pauseAnalysis = `\n**การหยุดพัก (${pauses.length} ครั้ง):**\n` +
+                    pauses.map(p => `- หลัง "${p.after}" หยุด ${p.duration}s (ที่ ${p.position})`).join('\n');
+            }
+
+            // Timing summary
+            const totalDuration = transcript[transcript.length - 1]?.endTime || duration;
+            const speakingTime = transcript.reduce((sum, seg) => {
+                return sum + ((seg.endTime || 0) - (seg.startTime || 0));
+            }, 0);
+            const pauseTime = totalDuration - speakingTime;
+
+            timingInfo = `\n**สถิติการพูด:**
+- เวลาพูดจริง: ${speakingTime.toFixed(1)}s (${(speakingTime / totalDuration * 100).toFixed(0)}%)
+- เวลาหยุดพัก: ${pauseTime.toFixed(1)}s (${(pauseTime / totalDuration * 100).toFixed(0)}%)
+- ความเร็วเฉลี่ย: ${(transcript.join(' ').split(' ').length / (speakingTime / 60)).toFixed(0)} คำ/นาที`;
+        } else {
+            transcriptText = String(transcript);
+        }
+
+        // ✨ Build previous feedback for progress comparison
+        let previousFeedback = '';
+
+        if (sessions && sessions.length > 0) {
+            const recentSessions = sessions
+                .filter(s => s.aiFeedback) // มี AI feedback
+                .slice(-3)                  // เอา 3 sessions สุดท้าย
+                .reverse();                 // ล่าสุดก่อน
+
+            if (recentSessions.length > 0) {
+                previousFeedback = `\n**📊 ประวัติการฝึกที่ผ่านมา (${recentSessions.length} sessions ล่าสุด):**\n\n`;
+
+                recentSessions.forEach((session, index) => {
+                    const fb = session.aiFeedback;
+                    const sessionNum = recentSessions.length - index;
+
+                    previousFeedback += `### Session ${sessionNum} (Day ${session.day}):
+- Overall Score: ${fb.scores.overall}/10
+- จุดแข็ง: ${fb.strengths.slice(0, 2).join(', ')}
+- จุดที่ต้องปรับปรุง: ${fb.improvements.slice(0, 2).join(', ')}
+- Pace: ${fb.pace?.overall || 'N/A'} (${fb.scores.pace || 'N/A'}/10)
+- Pauses: ${fb.pauses?.totalPauses || 0} ครั้ง (${fb.scores.pauses || 'N/A'}/10)
+- Root Cause: ${fb.rootCause?.primaryIssue || 'N/A'}
+
+`;
+                });
+
+                previousFeedback += `\n**🎯 จุดสำคัญที่ต้องเฝ้าดู:**
+- คุณได้รับคำแนะนำให้แก้ไข: ${recentSessions[0].aiFeedback.improvements.join(', ')}
+- Root cause เดิม: ${recentSessions[0].aiFeedback.rootCause?.primaryIssue}
+`;
+            }
+        }
+
+        const prompt = `คุณคือโค้ชสอนการพูดมืออาชีพ วิเคราะห์การพูดต่อไปนี้อย่างละเอียด:
+
+**หัวข้อ:** ${topicData.title} - ${topicData.desc}
+**เป้าหมายสัปดาห์นี้:** ${weekData.goal}
+**ระยะเวลา:** ${Math.floor(duration / 60)} นาที ${duration % 60} วินาที
+
+**เนื้อหาที่พูด (มี timestamp):**
+${transcriptText}
+${timingInfo}
+${pauseAnalysis}
+${previousFeedback}
+
+กรุณาวิเคราะห์อย่างละเอียดและให้ผลลัพธ์เป็น JSON:
+
+{
+  "sentences": [
+    {
+      "text": "ประโยคที่พูด",
+      "purpose": "จุดประสงค์",
+      "clarity": 7,
+      "issues": ["ปัญหาที่พบ"]
+    }
+  ],
+  "structure": {
+    "hasIntro": true,
+    "hasBody": true,
+    "hasConclusion": false,
+    "overallStructure": "อธิบายโครงสร้าง",
+    "score": 6
+  },
+  "pace": {
+    "overall": "เร็วเกินไป/พอดี/ช้าเกินไป",
+    "wordsPerMinute": 150,
+    "paceScore": 7,
+    "paceIssues": ["พูดเร็วเกินไปในช่วงแรก", "ช้าลงในช่วงท้าย"]
+  },
+  "pauses": {
+    "totalPauses": 5,
+    "appropriatePauses": ["หลังจบประโยค", "ก่อนเปลี่ยนหัวข้อ"],
+    "inappropriatePauses": ["กลางประโยค", "ขณะคิดคำพูด"],
+    "pauseScore": 6,
+    "pauseIssues": ["หยุดบ่อยเกินไป", "ไม่หยุดพอในจุดสำคัญ"]
+  },
+  "progression": {
+    "comparedToPrevious": "ดีขึ้น/แย่ลง/เท่าเดิม/ครั้งแรก",
+    "improvements": [
+      "แก้จุดอ่อนเรื่อง X ได้แล้ว",
+      "Pace ดีขึนกว่าครั้งก่อน"
+    ],
+    "stillNeedWork": [
+      "ยังต้องปรับปรุงเร ื่อง Y",
+      "Pauses ยังไม่เหมาะสม"
+    ],
+    "progressScore": 8,
+    "progressNote": "คำอธิบายความก้าวหน้าโดยรวม"
+  },
+  "cognitivePatterns": {
+    "thinkingStyle": "scattered/organized",
+    "scopeControl": "expanding/controlled",
+    "preparedness": "improvised/prepared",
+    "issues": ["ไม่ได้คิดโครงสร้างก่อนพูด", "ขาด scope ที่ชัดเจน"]
+  },
+  "rootCause": {
+    "primaryIssue": "ขาดการวางแผน",
+    "whyYouSpokeThatWay": "พูดโดยไม่ได้คิดโครงสร้างล่วงหน้า",
+    "deepInsights": ["insight1", "insight2"]
+  },
+  "scores": {
+    "fluency": 7,
+    "clarity": 6,
+    "structure": 5,
+    "pace": 7,
+    "pauses": 6,
+    "engagement": 7,
+    "overall": 6.5
+  },
+  "strengths": ["จุดแข็ง1", "จุดแข็ง2", "จุดแข็ง3"],
+  "improvements": ["ควรปรับปรุง1", "ควรปรับปรุง2", "ควรปรับปรุง3"],
+  "nextSteps": "คำแนะนำ"
+}
+
+สิ่งสำคัญ:
+- แยกประโยคและวิเคราะห์ทีพละประโยค
+- ดูว่ามีโครงสร้าง intro-body-conclusion หรือไม่
+- **วิเคราะห์จังหวะการพูดจาก timestamp** (เร็ว/ช้า/สม่ำเสมอ)
+- **วิเคราะห์การหยุดพัก** (เหมาะสม/ไม่เหมาะสม/บ่อยเกิน/น้อยเกิน)
+- วิเคราะห์ว่าผู้พูดมีการวางแผน/คิดโครงสร้างก่อนพูดหรือไม่
+- อธิบายว่าทำไมจึงพูดแบบนั้น
+- **ให้คะแนน pace และ pauses แยกต่างหาก**
+${sessions && sessions.length > 0 ? `
+- **เปรียบเทียบกับ sessions ก่อนหน้า** (ดีขึ้น/แย่ลง/เท่าเดิม)
+- **ชี้ให้เห็นว่าแก้จุดอ่อนเดิมได้หรือยัง**
+- **ให้กำลังใจถ้าพัฒนาขึ้น หรือเตือนถ้ายังทำผิดเดิมซ้ำ**
+- ให้คะแนน progressScore (0-10) โดยดูจากความพยายามแก้ไขจุดอ่อนเดิม
+` : '- นี่เป็นครั้งแรก ให้วิเคราะห์เชิงลึกเพื่อเป็นพื้นฐานการเปรียบเทียบครั้งต่อไป'}`;
+
+        try {
+            console.log('🤖 Calling backend API at:', `${this.backendURL}/api/analyze`);
+
+            const response = await fetch(`${this.backendURL}/api/analyze`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: prompt })
+            });
+
+            if (!response.ok) {
+                console.error('❌ Backend API Error:', response.status, response.statusText);
+                const errorData = await response.json();
+                console.error('Error details:', errorData);
+                return null;
+            }
+
+            const data = await response.json();
+            if (!data.candidates || !data.candidates[0]) {
+                console.error('⚠️ No valid response from API');
+                return null;
+            }
+
+            const text = data.candidates[0].content.parts[0].text;
+
+            // Extract JSON from response
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                return JSON.parse(jsonMatch[0]);
+            }
+
+            console.error('⚠️ No valid JSON found in AI response');
+            return null;
+        } catch (error) {
+            console.error('❌ AI Analysis Error:', error);
+            console.error('💡 Make sure backend is running: ./start_backend.sh');
+            return null;
+        }
+    }
+
+
+}
+
+// Main App Component
+function App() {
+    const [currentDay, setCurrentDay] = useState(1);
+    const [currentView, setCurrentView] = useState('dashboard');
+    const [timer, setTimer] = useState(0);
+    const [isTimerRunning, setIsTimerRunning] = useState(false);
+    const [sessions, setSessions] = useState([]);
+    const [todayCompleted, setTodayCompleted] = useState(false);
+    const [apiKey, setApiKey] = useState('');
+    const [isRecording, setIsRecording] = useState(false);
+    const [mediaRecorder, setMediaRecorder] = useState(null);
+    const [recordedBlob, setRecordedBlob] = useState(null);
+    const [aiFeedback, setAiFeedback] = useState(null);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [achievements, setAchievements] = useState([]);
+    const [showAchievement, setShowAchievement] = useState(null);
+
+    // NEW: Speech recognition and transcript
+    const [transcript, setTranscript] = useState([]);
+    const [liveTranscript, setLiveTranscript] = useState('');
+    const [currentSentenceIndex, setCurrentSentenceIndex] = useState(-1);
+    const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+
+    const aiCoach = useRef(null);
+    const recognition = useRef(null);
+    const audioPlayer = useRef(null);
+    const recordingStartTime = useRef(0);
+
+    useEffect(() => {
+        loadProgress();
+    }, []);
+
+    useEffect(() => {
+        let interval;
+        if (isTimerRunning) {
+            interval = setInterval(() => {
+                setTimer(t => t + 1);
+            }, 1000);
+        }
+        return () => clearInterval(interval);
+    }, [isTimerRunning]);
+
+    useEffect(() => {
+        // Initialize AI Coach (backend handles API key)
+        aiCoach.current = new AICoach();
+    }, []);
+
+    async function loadProgress() {
+        const savedDay = localStorage.getItem('current_day');
+        const savedSessions = localStorage.getItem('sessions');
+        const savedApiKey = localStorage.getItem('gemini_api_key');
+        const savedAchievements = localStorage.getItem('achievements');
+        const completedToday = localStorage.getItem(`completed_day_${currentDay}`);
+
+        if (savedDay) setCurrentDay(parseInt(savedDay));
+        if (savedSessions) setSessions(JSON.parse(savedSessions));
+        if (savedApiKey) setApiKey(savedApiKey);
+        if (savedAchievements) setAchievements(JSON.parse(savedAchievements));
+        if (completedToday) setTodayCompleted(completedToday === 'true');
+    }
+
+    function saveProgress(day, newSessions) {
+        localStorage.setItem('current_day', day.toString());
+        localStorage.setItem('sessions', JSON.stringify(newSessions));
+
+        // Auto-export to JSON file every session
+        exportToJSON(newSessions);
+    }
+
+    function exportToJSON(sessionsData = sessions) {
+        const data = {
+            version: '2.0',
+            exportDate: new Date().toISOString(),
+            currentDay: currentDay,
+            sessions: sessionsData,
+            achievements: achievements
+        };
+
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `speaking-coach-backup-${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+    }
+
+    function importFromJSON(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                setCurrentDay(data.currentDay || 1);
+                setSessions(data.sessions || []);
+                setAchievements(data.achievements || []);
+
+                localStorage.setItem('current_day', (data.currentDay || 1).toString());
+                localStorage.setItem('sessions', JSON.stringify(data.sessions || []));
+                localStorage.setItem('achievements', JSON.stringify(data.achievements || []));
+
+                alert('นำเข้าข้อมูลสำเร็จ!');
+            } catch (error) {
+                alert('ไฟล์ไม่ถูกต้อง');
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    async function startRecording() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: false
+            });
+
+            const recorder = new MediaRecorder(stream);
+            const chunks = [];
+
+            recorder.ondataavailable = (e) => chunks.push(e.data);
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'audio/webm' });
+                setRecordedBlob(blob);
+            };
+
+            recorder.start();
+            setMediaRecorder(recorder);
+            setIsRecording(true);
+
+            // Initialize speech recognition
+            initializeSpeechRecognition();
+
+            recordingStartTime.current = Date.now();
+            startTimer();
+        } catch (error) {
+            alert('ไม่สามารถเข้าถึงไมค์ได้ กรุณาอนุญาตการใช้งานไมค์');
+            console.error(error);
+        }
+    }
+
+    function initializeSpeechRecognition() {
+        try {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                console.warn('Speech Recognition not supported in this browser');
+                return;
+            }
+
+            const recog = new SpeechRecognition();
+            recog.continuous = true;
+            recog.interimResults = true;
+            recog.lang = 'th-TH';
+            recog.maxAlternatives = 1;
+
+            const transcriptSegments = [];
+            let currentSegment = { text: '', startTime: 0, endTime: 0 };
+            let interimTimeout = null;
+            let lastFinalTime = 0;
+
+            recog.onstart = () => {
+                console.log('✅ Speech recognition started');
+                currentSegment.startTime = (Date.now() - recordingStartTime.current) / 1000;
+                lastFinalTime = currentSegment.startTime;
+            };
+
+            recog.onresult = (event) => {
+                let interimTranscript = '';
+                let finalTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript + ' ';
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+
+                // Update live transcript
+                setLiveTranscript(interimTranscript);
+
+                // Save final transcript with timestamp
+                if (finalTranscript) {
+                    const endTime = (Date.now() - recordingStartTime.current) / 1000;
+
+                    // Create segment with proper timing
+                    transcriptSegments.push({
+                        text: finalTranscript.trim(),
+                        startTime: lastFinalTime,
+                        endTime: endTime
+                    });
+
+                    setTranscript([...transcriptSegments]);
+                    lastFinalTime = endTime;
+
+                    // Clear interim timeout
+                    if (interimTimeout) clearTimeout(interimTimeout);
+                }
+
+                // If we have interim results, set a timeout to force finalization
+                // This helps break long segments into smaller pieces
+                if (interimTranscript && !finalTranscript) {
+                    if (interimTimeout) clearTimeout(interimTimeout);
+
+                    // Strategy:
+                    // 1. Force break if silence > 800ms (Natural pause)
+                    // 2. Force break if segment > 150 chars (Prevent too long segments)
+
+                    const isTooLong = interimTranscript.length > 150;
+                    const timeoutDuration = isTooLong ? 100 : 800;
+
+                    interimTimeout = setTimeout(() => {
+                        // Force restart to finalize current interim result
+                        if (recog && mediaRecorder && mediaRecorder.state === 'recording') {
+                            try {
+                                console.log(`✂️ Force finalizing: ${isTooLong ? 'Too long' : 'Silence detected'}`);
+                                recog.stop();
+                                setTimeout(() => {
+                                    if (mediaRecorder && mediaRecorder.state === 'recording') {
+                                        recog.start();
+                                    }
+                                }, 100);
+                            } catch (e) {
+                                console.warn('Failed to restart recognition:', e);
+                            }
+                        }
+                    }, timeoutDuration); // Force break logic
+                }
+            };
+
+            recog.onerror = (event) => {
+                console.error('❌ Speech recognition error:', event.error);
+                if (event.error === 'network') {
+                    console.warn('⚠️ Network error - Speech recognition may not work on HTTP (needs HTTPS) or your browser may not support it');
+                } else if (event.error === 'not-allowed') {
+                    console.warn('⚠️ Microphone access denied - please allow microphone permission');
+                }
+            };
+
+            recog.onend = () => {
+                console.log('Speech recognition ended');
+                // Auto-restart if still recording
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    try {
+                        recog.start();
+                        console.log('🔄 Restarting speech recognition...');
+                    } catch (e) {
+                        console.error('Failed to restart speech recognition:', e);
+                    }
+                }
+            };
+
+            recog.start();
+            recognition.current = recog;
+        } catch (error) {
+            console.error('Failed to initialize speech recognition:', error);
+        }
+    }
+
+    function stopRecording() {
+        if (mediaRecorder) {
+            mediaRecorder.stop();
+            mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            setIsRecording(false);
+            setIsTimerRunning(false);
+        }
+
+        // Stop speech recognition
+        if (recognition.current) {
+            recognition.current.stop();
+        }
+
+        setLiveTranscript('');
+    }
+
+    async function analyzeWithAI() {
+        if (!apiKey) {
+            alert('กรุณาใส่ Gemini API Key ในหน้าตั้งค่าก่อน');
+            return;
+        }
+
+        setIsAnalyzing(true);
+
+        const { weekData, topicData } = getTodayData();
+
+        // Handle undefined or empty transcript
+        const transcriptData = (transcript && transcript.length > 0)
+            ? transcript
+            : "ไม่มี transcript (Speech Recognition อาจไม่รองรับในบราวเซอร์นี้)";
+
+        console.log('🤖 Starting AI analysis...');
+        console.log('Transcript data:', transcriptData);
+        console.log('Is array?', Array.isArray(transcriptData), 'Length:', Array.isArray(transcriptData) ? transcriptData.length : 'N/A');
+
+        // Pass sessions for progress comparison
+        const feedback = await aiCoach.current.analyzeSpeech(
+            transcriptData,
+            timer,
+            weekData,
+            topicData,
+            sessions  // ← เพิ่ม sessions เพื่อเปรียบเทียบความก้าวหน้า
+        );
+
+        console.log('✅ AI analysis complete:', feedback);
+        setAiFeedback(feedback);
+        setIsAnalyzing(false);
+    }
+
+    async function completeSession(manualScore, notes) {
+        const score = aiFeedback ? aiFeedback.scores.overall : manualScore;
+
+        const newSession = {
+            day: currentDay,
+            date: new Date().toISOString(),
+            duration: timer,
+            score: score,
+            notes: notes,
+            transcript: transcript,  // Store transcript with timestamps
+            aiFeedback: aiFeedback,
+            hasRecording: !!recordedBlob
+        };
+
+        const newSessions = [...sessions, newSession];
+        setSessions(newSessions);
+        setTodayCompleted(true);
+
+        saveProgress(currentDay, newSessions);
+        localStorage.setItem(`completed_day_${currentDay}`, 'true');
+
+        // Check achievements
+        checkAchievements(newSessions, score);
+
+        // Reset for next session
+        setRecordedBlob(null);
+        setAiFeedback(null);
+        setTranscript([]);
+        setLiveTranscript('');
+
+        // Auto advance
+        if (currentDay < 30) {
+            setTimeout(() => {
+                const nextDay = currentDay + 1;
+                setCurrentDay(nextDay);
+                setTodayCompleted(false);
+                localStorage.setItem('current_day', nextDay.toString());
+                localStorage.removeItem(`completed_day_${nextDay}`);
+            }, 2000);
+        }
+    }
+
+    function checkAchievements(sessionsData, latestScore) {
+        const newAchievements = [];
+
+        // Fire Starter
+        if (calculateStreak(sessionsData) >= 3 && !achievements.includes('fire_starter')) {
+            newAchievements.push({
+                id: 'fire_starter',
+                title: '🔥 Fire Starter',
+                desc: 'ฝึก 3 วันติดต่อกัน!'
+            });
+        }
+
+        // Week Warrior
+        if (sessionsData.length >= 7 && !achievements.includes('week_warrior')) {
+            newAchievements.push({
+                id: 'week_warrior',
+                title: '💪 Week Warrior',
+                desc: 'จบสัปดาห์ที่ 1!'
+            });
+        }
+
+        // Perfect Score
+        if (latestScore >= 9.5 && !achievements.includes('perfect_score')) {
+            newAchievements.push({
+                id: 'perfect_score',
+                title: '⭐ Perfect Score',
+                desc: 'ได้คะแนนเกือบเต็ม!'
+            });
+        }
+
+        if (newAchievements.length > 0) {
+            const updatedAchievements = [...achievements, ...newAchievements.map(a => a.id)];
+            setAchievements(updatedAchievements);
+            localStorage.setItem('achievements', JSON.stringify(updatedAchievements));
+
+            // Show first achievement
+            setShowAchievement(newAchievements[0]);
+            setTimeout(() => setShowAchievement(null), 3000);
+        }
+    }
+
+    function startTimer() {
+        setTimer(0);
+        setIsTimerRunning(true);
+    }
+
+    function stopTimer() {
+        setIsTimerRunning(false);
+    }
+
+    function resetTimer() {
+        setTimer(0);
+        setIsTimerRunning(false);
+        setRecordedBlob(null);
+        setAiFeedback(null);
+        setTranscript([]);
+        setLiveTranscript('');
+        setCurrentSentenceIndex(-1);
+    }
+
+    function resetProgress() {
+        if (confirm('คุณแน่ใจหรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้')) {
+            // Export before reset
+            exportToJSON();
+
+            setCurrentDay(1);
+            setSessions([]);
+            setTodayCompleted(false);
+            setAchievements([]);
+
+            localStorage.clear();
+            alert('รีเซ็ตสำเร็จ! ข้อมูลเก่าถูก Export ให้แล้ว');
+        }
+    }
+
+    function getCurrentWeek() {
+        if (currentDay <= 7) return 'week1';
+        if (currentDay <= 14) return 'week2';
+        if (currentDay <= 21) return 'week3';
+        return 'week4';
+    }
+
+    function getTodayData() {
+        const week = getCurrentWeek();
+        const weekData = TRAINING_DATA[week];
+        const topicData = weekData.topics.find(t => t.day === currentDay);
+        const powerWordData = weekData.powerWords.find(pw => pw.day === currentDay);
+
+        return { weekData, topicData, powerWordData };
+    }
+
+    const { weekData, topicData, powerWordData } = getTodayData();
+
+    return (
+        <div className="min-h-screen p-4 md:p-8">
+            {/* Achievement Popup */}
+            {showAchievement && (
+                <div className="fixed top-4 right-4 z-50 achievement-pop glass-effect rounded-2xl p-6 shadow-2xl max-w-sm">
+                    <div className="text-4xl mb-2">{showAchievement.title.split(' ')[0]}</div>
+                    <div className="font-bold text-lg text-purple-600">{showAchievement.title}</div>
+                    <div className="text-sm text-gray-600">{showAchievement.desc}</div>
+                </div>
+            )}
+
+            <div className="max-w-6xl mx-auto">
+                {/* Header */}
+                <div className="glass-effect rounded-3xl p-6 mb-6 shadow-2xl">
+                    <div className="flex justify-between items-start mb-4">
+                        <div>
+                            <h1 className="text-3xl md:text-4xl font-bold text-purple-800 mb-2">
+                                🎯 Speaking Coach Pro
+                            </h1>
+                            <p className="text-gray-600">Zero to Hero in 30 Days</p>
+                            {apiKey && (
+                                <div className="mt-2 ai-badge text-white text-xs px-3 py-1 rounded-full inline-block">
+                                    ✨ AI-Powered
+                                </div>
+                            )}
+                        </div>
+                        <div className="text-right">
+                            <div className="text-sm text-gray-500">Day</div>
+                            <div className="text-3xl font-bold text-purple-600">{currentDay}/30</div>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            onClick={() => setCurrentView('dashboard')}
+                            className={`px-4 py-2 rounded-lg font-semibold transition ${currentView === 'dashboard' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'}`}
+                        >
+                            📊 Dashboard
+                        </button>
+                        <button
+                            onClick={() => setCurrentView('training')}
+                            className={`px-4 py-2 rounded-lg font-semibold transition ${currentView === 'training' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'}`}
+                        >
+                            💪 ฝึกวันนี้
+                        </button>
+                        <button
+                            onClick={() => setCurrentView('words')}
+                            className={`px-4 py-2 rounded-lg font-semibold transition ${currentView === 'words' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'}`}
+                        >
+                            📚 Power Words
+                        </button>
+                        <button
+                            onClick={() => setCurrentView('progress')}
+                            className={`px-4 py-2 rounded-lg font-semibold transition ${currentView === 'progress' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'}`}
+                        >
+                            📈 ความคืบหน้า
+                        </button>
+                        <button
+                            onClick={() => setCurrentView('settings')}
+                            className={`px-4 py-2 rounded-lg font-semibold transition ${currentView === 'settings' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'}`}
+                        >
+                            ⚙️ ตั้งค่า
+                        </button>
+                    </div>
+                </div>
+
+                {/* Views */}
+                {currentView === 'dashboard' && (
+                    <Dashboard
+                        currentDay={currentDay}
+                        weekData={weekData}
+                        sessions={sessions}
+                        todayCompleted={todayCompleted}
+                        setCurrentView={setCurrentView}
+                        achievements={achievements}
+                    />
+                )}
+
+                {currentView === 'training' && (
+                    <TrainingView
+                        currentDay={currentDay}
+                        topicData={topicData}
+                        weekData={weekData}
+                        timer={timer}
+                        isTimerRunning={isTimerRunning}
+                        isRecording={isRecording}
+                        startRecording={startRecording}
+                        stopRecording={stopRecording}
+                        resetTimer={resetTimer}
+                        completeSession={completeSession}
+                        todayCompleted={todayCompleted}
+                        recordedBlob={recordedBlob}
+                        analyzeWithAI={analyzeWithAI}
+                        aiFeedback={aiFeedback}
+                        isAnalyzing={isAnalyzing}
+                        hasApiKey={!!apiKey}
+                        transcript={transcript}
+                        liveTranscript={liveTranscript}
+                        audioPlayerRef={audioPlayer}
+                        currentSentenceIndex={currentSentenceIndex}
+                        setCurrentSentenceIndex={setCurrentSentenceIndex}
+                        audioCurrentTime={audioCurrentTime}
+                        setAudioCurrentTime={setAudioCurrentTime}
+                    />
+                )}
+
+                {currentView === 'words' && (
+                    <PowerWordsView
+                        currentDay={currentDay}
+                        powerWordData={powerWordData}
+                        weekData={weekData}
+                    />
+                )}
+
+                {currentView === 'progress' && (
+                    <ProgressView
+                        sessions={sessions}
+                        currentDay={currentDay}
+                        resetProgress={resetProgress}
+                        exportToJSON={() => exportToJSON()}
+                        importFromJSON={importFromJSON}
+                        achievements={achievements}
+                    />
+                )}
+
+                {currentView === 'settings' && (
+                    <SettingsView
+                        apiKey={apiKey}
+                        setApiKey={setApiKey}
+                    />
+                )}
+            </div>
+        </div>
+    );
+}
+
+// Dashboard Component (same as before but with achievements)
+function Dashboard({ currentDay, weekData, sessions, todayCompleted, setCurrentView, achievements }) {
+    const progress = (currentDay / 30) * 100;
+    const streak = calculateStreak(sessions);
+
+    return (
+        <div className="space-y-6">
+            <div className="glass-effect rounded-3xl p-8 shadow-2xl">
+                <div className="flex justify-between items-center mb-4">
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-800">Day {currentDay}/30</h2>
+                        <p className="text-purple-600 font-semibold">{weekData.name}</p>
+                        <p className="text-sm text-gray-600">{weekData.goal}</p>
+                    </div>
+                    <div className="text-right">
+                        <div className="text-4xl font-bold text-purple-600">{Math.round(progress)}%</div>
+                        <div className="text-sm text-gray-600">เสร็จสมบูรณ์</div>
+                    </div>
+                </div>
+
+                <div className="w-full bg-gray-200 rounded-full h-4 mb-6">
+                    <div
+                        className="bg-gradient-to-r from-purple-500 to-pink-500 h-4 rounded-full transition-all duration-500"
+                        style={{ width: `${progress}%` }}
+                    ></div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                    <div className="text-center p-4 bg-purple-50 rounded-xl">
+                        <div className="text-3xl font-bold text-purple-600">{sessions.length}</div>
+                        <div className="text-sm text-gray-600">เซสชันทั้งหมด</div>
+                    </div>
+                    <div className="text-center p-4 bg-pink-50 rounded-xl">
+                        <div className="text-3xl font-bold text-pink-600">{streak}</div>
+                        <div className="text-sm text-gray-600">วันติดต่อกัน 🔥</div>
+                    </div>
+                    <div className="text-center p-4 bg-indigo-50 rounded-xl">
+                        <div className="text-3xl font-bold text-indigo-600">
+                            {sessions.length > 0 ? (sessions.reduce((a, b) => a + b.score, 0) / sessions.length).toFixed(1) : 0}
+                        </div>
+                        <div className="text-sm text-gray-600">คะแนนเฉลี่ย</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Achievements */}
+            {achievements.length > 0 && (
+                <div className="glass-effect rounded-3xl p-8 shadow-2xl">
+                    <h3 className="text-xl font-bold text-gray-800 mb-4">🏆 Achievements</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {achievements.map((id) => {
+                            const badges = {
+                                fire_starter: { emoji: '🔥', name: 'Fire Starter' },
+                                week_warrior: { emoji: '💪', name: 'Week Warrior' },
+                                perfect_score: { emoji: '⭐', name: 'Perfect Score' },
+                                half_way: { emoji: '🎯', name: 'Half Way' }
+                            };
+                            const badge = badges[id];
+                            return badge ? (
+                                <div key={id} className="bg-gradient-to-br from-purple-50 to-pink-50 p-4 rounded-xl text-center border-2 border-purple-200">
+                                    <div className="text-3xl mb-1">{badge.emoji}</div>
+                                    <div className="text-xs font-semibold text-purple-600">{badge.name}</div>
+                                </div>
+                            ) : null;
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* Today's Mission */}
+            <div className="glass-effect rounded-3xl p-8 shadow-2xl">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">
+                    {todayCompleted ? '✅ เสร็จสิ้นแล้ววันนี้!' : '🎯 ภารกิจวันนี้'}
+                </h3>
+                {todayCompleted ? (
+                    <div className="text-center py-8">
+                        <div className="text-6xl mb-4">🎉</div>
+                        <p className="text-lg text-gray-600 mb-4">ยอดเยี่ยม! คุณทำภารกิจวันนี้สำเร็จแล้ว</p>
+                        <p className="text-sm text-gray-500">กลับมาพรุ่งนี้เพื่อฝึกต่อ</p>
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => setCurrentView('training')}
+                        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-6 rounded-xl font-bold text-lg hover:shadow-2xl transition transform hover:scale-105"
+                    >
+                        🚀 เริ่มฝึกเลย! (Day {currentDay})
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// Training View with AI (truncated for brevity - will continue in next file)
+function TrainingView({ currentDay, topicData, weekData, timer, isTimerRunning, isRecording,
+    startRecording, stopRecording, resetTimer, completeSession, todayCompleted,
+    recordedBlob, analyzeWithAI, aiFeedback, isAnalyzing, hasApiKey,
+    transcript, liveTranscript, audioPlayerRef, currentSentenceIndex,
+    setCurrentSentenceIndex, audioCurrentTime, setAudioCurrentTime }) {
+    const [score, setScore] = useState(5);
+    const [notes, setNotes] = useState('');
+    const [showCompleteForm, setShowCompleteForm] = useState(false);
+
+    function formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function handleComplete() {
+        stopRecording();
+        setShowCompleteForm(true);
+
+        // Trigger AI analysis immediately if API key exists
+        if (hasApiKey) {
+            console.log('🎯 Auto-triggering AI analysis...');
+            // Small delay to ensure state updates
+            setTimeout(() => {
+                analyzeWithAI();
+            }, 100);
+        }
+    }
+
+    function handleSubmitSession() {
+        completeSession(score, notes);
+        setShowCompleteForm(false);
+        setScore(5);
+        setNotes('');
+        resetTimer();
+    }
+
+    if (todayCompleted) {
+        return (
+            <div className="glass-effect rounded-3xl p-8 shadow-2xl text-center">
+                <div className="text-6xl mb-4">✅</div>
+                <h2 className="text-2xl font-bold text-gray-800 mb-2">เสร็จสิ้นแล้ว!</h2>
+                <p className="text-gray-600 mb-4">คุณได้ทำภารกิจวันที่ {currentDay} เรียบร้อยแล้ว</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6">
+            {/* Training Info */}
+            <div className="glass-effect rounded-3xl p-8 shadow-2xl">
+                <div className="mb-6">
+                    <span className="bg-purple-100 text-purple-600 px-3 py-1 rounded-full text-sm font-semibold">
+                        Day {currentDay} - {weekData.name}
+                    </span>
+                </div>
+
+                <h2 className="text-3xl font-bold text-gray-800 mb-2">{topicData.title}</h2>
+                <p className="text-gray-600 text-lg mb-4">{topicData.desc}</p>
+
+                <div className="flex gap-4 flex-wrap">
+                    <div className="bg-purple-50 px-4 py-2 rounded-lg">
+                        <span className="text-sm text-gray-600">เวลาแนะนำ: </span>
+                        <span className="font-bold text-purple-600">{topicData.duration} นาที</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Timer & Recording */}
+            <div className="glass-effect rounded-3xl p-8 shadow-2xl text-center">
+                <div className={`timer-display mb-6 ${isRecording ? 'text-red-600' : 'text-purple-600'}`}>
+                    {formatTime(timer)}
+                </div>
+
+                {isRecording && (
+                    <div className="recording-indicator mb-6">
+                        <div className="inline-block bg-red-100 border-2 border-red-500 rounded-full px-4 py-2">
+                            <span className="text-red-600 font-semibold">🔴 กำลังอัด...</span>
+                        </div>
+                    </div>
+                )}
+
+                <div className="flex gap-4 justify-center flex-wrap">
+                    {!isRecording ? (
+                        <button
+                            onClick={startRecording}
+                            className="bg-gradient-to-r from-red-500 to-red-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:shadow-2xl transition transform hover:scale-105"
+                        >
+                            🎤 เริ่มอัด + AI Analysis
+                        </button>
+                    ) : (
+                        <>
+                            <button
+                                onClick={handleComplete}
+                                className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:shadow-2xl transition transform hover:scale-105"
+                            >
+                                ✅ เสร็จสิ้น
+                            </button>
+                        </>
+                    )}
+
+                    {timer > 0 && !isRecording && (
+                        <button
+                            onClick={resetTimer}
+                            className="bg-gray-300 text-gray-700 px-8 py-4 rounded-xl font-bold text-lg hover:shadow-xl transition"
+                        >
+                            🔄 ลองใหม่
+                        </button>
+                    )}
+                </div>
+
+                {!hasApiKey && (
+                    <div className="mt-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4">
+                        <p className="text-sm text-yellow-700">
+                            💡 ใส่ Gemini API Key ในหน้าตั้งค่าเพื่อรับ AI Feedback อัตโนมัติ!
+                        </p>
+                    </div>
+                )}
+            </div>
+
+            {/* Live Transcript Display */}
+            {(isRecording || transcript.length > 0) && (
+                <div className="glass-effect rounded-3xl p-8 shadow-2xl">
+                    <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <span>📝</span> Transcript
+                        {isRecording && <span className="text-sm text-red-600 animate-pulse">(กำลังบันทึก...)</span>}
+                    </h3>
+
+                    {/* Live interim transcript */}
+                    {isRecording && liveTranscript && (
+                        <div className="mb-4 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
+                            <p className="text-sm text-blue-600 mb-1">กำลังฟัง:</p>
+                            <p className="text-gray-700 italic">{liveTranscript}</p>
+                        </div>
+                    )}
+
+                    {/* Final transcript segments */}
+                    {transcript.length > 0 ? (
+                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                            {transcript.map((seg, idx) => (
+                                <div key={idx} className="p-3 bg-purple-50 rounded-lg border-l-4 border-purple-600">
+                                    <div className="flex justify-between items-start mb-1">
+                                        <span className="text-xs text-gray-500">
+                                            {seg.startTime?.toFixed(1)}s - {seg.endTime?.toFixed(1)}s
+                                        </span>
+                                    </div>
+                                    <p className="text-gray-800">{seg.text}</p>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        !isRecording && (
+                            <div className="text-center py-8 text-gray-400">
+                                <p>ยังไม่มี transcript</p>
+                                <p className="text-sm mt-2">
+                                    {navigator.userAgent.includes('Chrome') || navigator.userAgent.includes('Edge')
+                                        ? 'เริ่มบันทึกเพื่อดู transcript แบบ real-time'
+                                        : '⚠️ บราวเซอร์นี้อาจไม่รองรับ Speech Recognition (ใช้ Chrome/Edge แทน)'}
+                                </p>
+                            </div>
+                        )
+                    )}
+                </div>
+            )}
+
+            {/* AI Feedback */}
+            {isAnalyzing && (
+                <div className="glass-effect rounded-3xl p-8 shadow-2xl text-center">
+                    <div className="text-4xl mb-4">🤖</div>
+                    <p className="text-lg font-semibold text-purple-600">AI กำลังวิเคราะห์...</p>
+                </div>
+            )}
+
+            {aiFeedback && (
+                <div className="glass-effect rounded-3xl p-8 shadow-2xl">
+                    <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                        <span>🤖</span> AI Feedback
+                    </h3>
+
+                    {/* Scores */}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                        <div className="bg-purple-50 p-4 rounded-xl text-center">
+                            <div className="text-2xl font-bold text-purple-600">{aiFeedback.scores.fluency}</div>
+                            <div className="text-xs text-gray-600">Fluency</div>
+                        </div>
+                        <div className="bg-pink-50 p-4 rounded-xl text-center">
+                            <div className="text-2xl font-bold text-pink-600">{aiFeedback.scores.clarity}</div>
+                            <div className="text-xs text-gray-600">Clarity</div>
+                        </div>
+                        <div className="bg-indigo-50 p-4 rounded-xl text-center">
+                            <div className="text-2xl font-bold text-indigo-600">{aiFeedback.scores.structure}</div>
+                            <div className="text-xs text-gray-600">Structure</div>
+                        </div>
+                        <div className="bg-green-50 p-4 rounded-xl text-center">
+                            <div className="text-2xl font-bold text-green-600">{aiFeedback.scores.engagement}</div>
+                            <div className="text-xs text-gray-600">Engagement</div>
+                        </div>
+                        <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-4 rounded-xl text-center border-2 border-purple-300">
+                            <div className="text-3xl font-bold text-purple-600">{aiFeedback.scores.overall}</div>
+                            <div className="text-xs text-gray-600 font-semibold">Overall</div>
+                        </div>
+                    </div>
+
+                    {/* Strengths & Improvements */}
+                    <div className="grid md:grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <h4 className="font-semibold text-green-600 mb-2">✅ จุดแข็ง:</h4>
+                            <ul className="space-y-2">
+                                {aiFeedback.strengths.map((s, i) => (
+                                    <li key={i} className="text-sm bg-green-50 p-3 rounded-lg">{s}</li>
+                                ))}
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 className="font-semibold text-orange-600 mb-2">⚠️ ควรปรับปรุง:</h4>
+                            <ul className="space-y-2">
+                                {aiFeedback.improvements.map((i, idx) => (
+                                    <li key={idx} className="text-sm bg-orange-50 p-3 rounded-lg">{i}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+
+                    {/* Next Steps */}
+                    <div className="bg-blue-50 p-4 rounded-xl">
+                        <h4 className="font-semibold text-blue-600 mb-2">🎯 คำแนะนำต่อไป:</h4>
+                        <p className="text-sm text-gray-700">{aiFeedback.nextSteps}</p>
+                    </div>
+
+                    {/* Cognitive Patterns (NEW) */}
+                    {aiFeedback.cognitivePatterns && (
+                        <div className="mt-6 bg-gradient-to-r from-purple-50 to-pink-50 p-6 rounded-xl border-2 border-purple-200">
+                            <h4 className="font-bold text-purple-700 mb-4 flex items-center gap-2">
+                                <span>🧠</span> Cognitive Patterns (รูปแบบการคิด)
+                            </h4>
+                            <div className="grid md:grid-cols-3 gap-4 mb-4">
+                                <div className="bg-white p-3 rounded-lg">
+                                    <p className="text-xs text-gray-500 mb-1">Thinking Style:</p>
+                                    <p className="font-semibold text-purple-600">{aiFeedback.cognitivePatterns.thinkingStyle}</p>
+                                </div>
+                                <div className="bg-white p-3 rounded-lg">
+                                    <p className="text-xs text-gray-500 mb-1">Scope Control:</p>
+                                    <p className="font-semibold text-pink-600">{aiFeedback.cognitivePatterns.scopeControl}</p>
+                                </div>
+                                <div className="bg-white p-3 rounded-lg">
+                                    <p className="text-xs text-gray-500 mb-1">Preparedness:</p>
+                                    <p className="font-semibold text-indigo-600">{aiFeedback.cognitivePatterns.preparedness}</p>
+                                </div>
+                            </div>
+                            {aiFeedback.cognitivePatterns.issues && aiFeedback.cognitivePatterns.issues.length > 0 && (
+                                <div className="bg-red-50 p-3 rounded-lg border-l-4 border-red-400">
+                                    <p className="text-sm font-semibold text-red-700 mb-2">⚠️ ปัญหาที่พบ:</p>
+                                    <ul className="space-y-1">
+                                        {aiFeedback.cognitivePatterns.issues.map((issue, i) => (
+                                            <li key={i} className="text-sm text-gray-700">• {issue}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Progression Analysis (NEW) */}
+                    {aiFeedback.progression && (
+                        <div className="mt-4 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border-2 border-blue-200">
+                            <h4 className="font-bold text-blue-800 mb-3 flex items-center gap-2">
+                                <span>📈</span> ความก้าวหน้า (เทียบกับครั้งก่อน)
+                            </h4>
+                            <div className="flex items-center mb-4">
+                                <div className={`text-lg font-bold px-3 py-1 rounded-full ${aiFeedback.progression.comparedToPrevious === 'ดีขึ้น' ? 'bg-green-100 text-green-700' :
+                                    aiFeedback.progression.comparedToPrevious === 'แย่ลง' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
+                                    }`}>
+                                    {aiFeedback.progression.comparedToPrevious}
+                                </div>
+                                <div className="ml-4 text-blue-700">
+                                    Progress Score: <span className="font-bold text-2xl">{aiFeedback.progression.progressScore}/10</span>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {aiFeedback.progression.improvements && aiFeedback.progression.improvements.length > 0 && (
+                                    <div className="bg-white p-3 rounded-lg border-l-4 border-green-500">
+                                        <h5 className="font-semibold text-green-700 mb-2">✅ พัฒนาขึ้น:</h5>
+                                        <ul className="text-sm space-y-1">
+                                            {aiFeedback.progression.improvements.map((item, i) => (
+                                                <li key={i} className="text-gray-700">• {item}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                {aiFeedback.progression.stillNeedWork && aiFeedback.progression.stillNeedWork.length > 0 && (
+                                    <div className="bg-white p-3 rounded-lg border-l-4 border-orange-500">
+                                        <h5 className="font-semibold text-orange-700 mb-2">⚠️ ยังต้องแก้:</h5>
+                                        <ul className="text-sm space-y-1">
+                                            {aiFeedback.progression.stillNeedWork.map((item, i) => (
+                                                <li key={i} className="text-gray-700">• {item}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                            {aiFeedback.progression.progressNote && (
+                                <p className="mt-3 text-sm text-blue-600 italic">
+                                    " {aiFeedback.progression.progressNote} "
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Root Cause Analysis (NEW) */}
+                    {aiFeedback.rootCause && (
+                        <div className="mt-4 bg-gradient-to-r from-orange-50 to-yellow-50 p-6 rounded-xl border-2 border-orange-200">
+                            <h4 className="font-bold text-orange-700 mb-3 flex items-center gap-2">
+                                <span>💡</span> Root Cause Analysis (ทำไมถึงพูดแบบนั้น)
+                            </h4>
+                            <div className="space-y-3">
+                                <div className="bg-white p-3 rounded-lg">
+                                    <p className="text-xs text-gray-500 mb-1">ปัญหาหลัก:</p>
+                                    <p className="font-semibold text-orange-600">{aiFeedback.rootCause.primaryIssue}</p>
+                                </div>
+                                <div className="bg-white p-3 rounded-lg">
+                                    <p className="text-xs text-gray-500 mb-1">คำอธิบาย:</p>
+                                    <p className="text-sm text-gray-700">{aiFeedback.rootCause.whyYouSpokeThatWay}</p>
+                                </div>
+                                {aiFeedback.rootCause.deepInsights && aiFeedback.rootCause.deepInsights.length > 0 && (
+                                    <div className="bg-white p-3 rounded-lg">
+                                        <p className="text-xs text-gray-500 mb-2">💎 Deep Insights:</p>
+                                        <ul className="space-y-1">
+                                            {aiFeedback.rootCause.deepInsights.map((insight, i) => (
+                                                <li key={i} className="text-sm text-gray-700">• {insight}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Complete Form */}
+            {showCompleteForm && (
+                <div className="glass-effect rounded-3xl p-8 shadow-2xl">
+                    <h3 className="text-2xl font-bold text-gray-800 mb-6">
+                        {aiFeedback ? '✨ AI ให้คะแนนแล้ว!' : 'ประเมินผลการฝึก'}
+                    </h3>
+
+                    {!aiFeedback && (
+                        <div className="mb-6">
+                            <label className="block text-gray-700 font-semibold mb-2">
+                                คะแนนพึงพอใจ (1-10)
+                            </label>
+                            <input
+                                type="range"
+                                min="1"
+                                max="10"
+                                value={score}
+                                onChange={(e) => setScore(parseInt(e.target.value))}
+                                className="w-full h-3 bg-purple-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                            <div className="text-center mt-2">
+                                <span className="text-4xl font-bold text-purple-600">{score}/10</span>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="mb-6">
+                        <label className="block text-gray-700 font-semibold mb-2">
+                            บันทึก / สิ่งที่เรียนรู้
+                        </label>
+                        <textarea
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            placeholder="เช่น: วันนี้พูดคล่องขึ้น, Dead Air น้อยลง..."
+                            className="w-full px-4 py-3 border-2 border-purple-200 rounded-xl focus:border-purple-500 focus:outline-none"
+                            rows="4"
+                        />
+                    </div>
+
+                    <button
+                        onClick={handleSubmitSession}
+                        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 rounded-xl font-bold text-lg hover:shadow-2xl transition transform hover:scale-105"
+                    >
+                        💾 บันทึกและไปต่อ
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// Power Words View (same as before)
+function PowerWordsView({ currentDay, powerWordData, weekData }) {
+    return (
+        <div className="glass-effect rounded-3xl p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">
+                📚 Power Words - Day {currentDay}
+            </h2>
+            <div className="grid gap-4">
+                {powerWordData && powerWordData.words.map((word, idx) => (
+                    <div key={idx} className="bg-gradient-to-r from-purple-50 to-pink-50 p-6 rounded-xl border-2 border-purple-200">
+                        <h3 className="text-2xl font-bold text-purple-600 mb-2">{word.word}</h3>
+                        <p className="text-gray-700 mb-3">{word.meaning}</p>
+                        <div className="bg-white p-3 rounded-lg border-l-4 border-purple-600">
+                            <span className="text-sm text-gray-500">ตัวอย่าง:</span>
+                            <p className="text-gray-800 italic">"{word.example}"</p>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+// Progress View with Export/Import + History Modal
+function ProgressView({ sessions, currentDay, resetProgress, exportToJSON, importFromJSON, achievements }) {
+    const [selectedSession, setSelectedSession] = React.useState(null);  // For history modal
+
+    const last7Days = sessions.slice(-7);
+    const averageScore = sessions.length > 0
+        ? (sessions.reduce((a, b) => a + b.score, 0) / sessions.length).toFixed(1)
+        : 0;
+
+    return (
+        <div className="space-y-6">
+            <div className="glass-effect rounded-3xl p-8 shadow-2xl">
+                <h2 className="text-2xl font-bold text-gray-800 mb-6">📈 สถิติโดยรวม</h2>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div className="bg-purple-50 p-4 rounded-xl text-center">
+                        <div className="text-3xl font-bold text-purple-600">{sessions.length}</div>
+                        <div className="text-sm text-gray-600">เซสชัน</div>
+                    </div>
+                    <div className="bg-pink-50 p-4 rounded-xl text-center">
+                        <div className="text-3xl font-bold text-pink-600">{averageScore}</div>
+                        <div className="text-sm text-gray-600">คะแนนเฉลี่ย</div>
+                    </div>
+                    <div className="bg-indigo-50 p-4 rounded-xl text-center">
+                        <div className="text-3xl font-bold text-indigo-600">
+                            {Math.floor(sessions.reduce((a, b) => a + b.duration, 0) / 60)}
+                        </div>
+                        <div className="text-sm text-gray-600">นาทีรวม</div>
+                    </div>
+                    <div className="bg-green-50 p-4 rounded-xl text-center">
+                        <div className="text-3xl font-bold text-green-600">{calculateStreak(sessions)}</div>
+                        <div className="text-sm text-gray-600">Streak 🔥</div>
+                    </div>
+                </div>
+
+                {/* Chart */}
+                {last7Days.length > 0 && (
+                    <div>
+                        <h3 className="font-semibold text-gray-700 mb-3">คะแนน 7 วันล่าสุด</h3>
+                        <div className="flex items-end gap-2 h-40">
+                            {last7Days.map((session, idx) => (
+                                <div key={idx} className="flex-1 flex flex-col items-center gap-2">
+                                    <div
+                                        className="w-full bg-gradient-to-t from-purple-600 to-pink-500 rounded-t-lg"
+                                        style={{ height: `${(session.score / 10) * 100}%` }}
+                                    ></div>
+                                    <div className="text-xs text-gray-600">D{session.day}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Data Management */}
+            <div className="glass-effect rounded-3xl p-8 shadow-2xl">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">💾 จัดการข้อมูล</h3>
+                <div className="flex gap-4 flex-wrap">
+                    <button
+                        onClick={exportToJSON}
+                        className="bg-blue-500 text-white px-6 py-3 rounded-xl font-semibold hover:bg-blue-600 transition"
+                    >
+                        📥 Export ข้อมูล (JSON)
+                    </button>
+                    <label className="bg-green-500 text-white px-6 py-3 rounded-xl font-semibold hover:bg-green-600 transition cursor-pointer">
+                        📤 Import ข้อมูล
+                        <input
+                            type="file"
+                            accept=".json"
+                            onChange={importFromJSON}
+                            className="hidden"
+                        />
+                    </label>
+                    <button
+                        onClick={resetProgress}
+                        className="bg-red-500 text-white px-6 py-3 rounded-xl font-semibold hover:bg-red-600 transition"
+                    >
+                        🔄 รีเซ็ต
+                    </button>
+                </div>
+            </div>
+
+            {/* Session History */}
+            <div className="glass-effect rounded-3xl p-8 shadow-2xl">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">📝 ประวัติการฝึก</h3>
+                {sessions.length === 0 ? (
+                    <p className="text-gray-500 text-center py-8">ยังไม่มีประวัติ</p>
+                ) : (
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                        {[...sessions].reverse().map((session, idx) => (
+                            <div key={idx} className="bg-purple-50 p-4 rounded-lg border-l-4 border-purple-600">
+                                <div className="flex justify-between items-start mb-2">
+                                    <div>
+                                        <span className="font-semibold text-purple-600">Day {session.day}</span>
+                                        {session.aiFeedback && (
+                                            <span className="ml-2 text-xs bg-purple-200 text-purple-700 px-2 py-1 rounded-full">
+                                                ✨ AI
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="font-bold text-purple-600">{session.score.toFixed(1)}/10</div>
+                                        <div className="text-xs text-gray-500">{Math.floor(session.duration / 60)} นาที</div>
+                                    </div>
+                                </div>
+                                {session.notes && (
+                                    <p className="text-sm text-gray-700 italic mb-2">"{session.notes}"</p>
+                                )}
+                                {session.aiFeedback && (
+                                    <div>
+                                        <div className="text-xs text-gray-600 bg-white p-2 rounded mb-2">
+                                            <strong>AI:</strong> {session.aiFeedback.nextSteps}
+                                        </div>
+                                        <button
+                                            onClick={() => setSelectedSession(session)}
+                                            className="text-xs bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-full transition"
+                                        >
+                                            📊 ดู AI Feedback ละเอียด
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* History Detail Modal */}
+            {selectedSession && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setSelectedSession(null)}>
+                    <div className="bg-white rounded-3xl p-8 max-w-4xl max-h-[90vh] overflow-y-auto m-4" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-between items-start mb-6">
+                            <div>
+                                <h2 className="text-3xl font-bold text-gray-800">AI Feedback - Day {selectedSession.day}</h2>
+                                <p className="text-gray-600">{new Date(selectedSession.date).toLocaleDateString('th-TH')}</p>
+                            </div>
+                            <button onClick={() => setSelectedSession(null)} className="text-4xl text-gray-400 hover:text-gray-600 leading-none">&times;</button>
+                        </div>
+
+                        {/* Scores */}
+                        <div className="bg-purple-50 rounded-2xl p-6 mb-6">
+                            <h3 className="text-xl font-bold text-purple-800 mb-4">📊 คะแนน</h3>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                <div><span className="font-semibold">Fluency:</span> {selectedSession.aiFeedback.scores.fluency}/10</div>
+                                <div><span className="font-semibold">Clarity:</span> {selectedSession.aiFeedback.scores.clarity}/10</div>
+                                <div><span className="font-semibold">Structure:</span> {selectedSession.aiFeedback.scores.structure}/10</div>
+                                <div><span className="font-semibold">Pace:</span> {selectedSession.aiFeedback.scores.pace || 'N/A'}/10</div>
+                                <div><span className="font-semibold">Pauses:</span> {selectedSession.aiFeedback.scores.pauses || 'N/A'}/10</div>
+                                <div className="md:col-span-1"><span className="font-bold text-purple-600">Overall:</span> <span className="text-2xl font-bold text-purple-600">{selectedSession.aiFeedback.scores.overall}/10</span></div>
+                            </div>
+                        </div>
+
+                        {/* Progression (if exists) */}
+                        {selectedSession.aiFeedback.progression && (
+                            <div className="bg-green-50 rounded-2xl p-6 mb-6">
+                                <h3 className="text-xl font-bold text-green-800 mb-4">📈 ความก้าวหน้า</h3>
+                                <div className="mb-4">
+                                    <span className="font-semibold">เปรีย บเทียบกับครั้งก่อน:</span>
+                                    <span className={`ml-2 font-bold ${selectedSession.aiFeedback.progression.comparedToPrevious === 'ดีขึ้น' ? 'text-green-600' :
+                                        selectedSession.aiFeedback.progression.comparedToPrevious === 'แย่ลง' ? 'text-red-600' : 'text-gray-600'
+                                        }`}>{selectedSession.aiFeedback.progression.comparedToPrevious}</span>
+                                    <span className="ml-4">Progress Score: <span className="font-bold">{selectedSession.aiFeedback.progression.progressScore}/10</span></span>
+                                </div>
+                                {selectedSession.aiFeedback.progression.improvements && selectedSession.aiFeedback.progression.improvements.length > 0 && (
+                                    <div className="mb-3">
+                                        <h4 className="font-semibold text-green-700 mb-2">✅ สิ่งที่ดีขึ้น:</h4>
+                                        <ul className="list-disc list-inside space-y-1">
+                                            {selectedSession.aiFeedback.progression.improvements.map((imp, i) => <li key={i} className="text-sm">{imp}</li>)}
+                                        </ul>
+                                    </div>
+                                )}
+                                {selectedSession.aiFeedback.progression.stillNeedWork && selectedSession.aiFeedback.progression.stillNeedWork.length > 0 && (
+                                    <div>
+                                        <h4 className="font-semibold text-orange-700 mb-2">⚠️ ยังต้องปรับปรุง:</h4>
+                                        <ul className="list-disc list-inside space-y-1">
+                                            {selectedSession.aiFeedback.progression.stillNeedWork.map((work, i) => <li key={i} className="text-sm">{work}</li>)}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Strengths */}
+                        <div className="bg-green-50 rounded-2xl p-6 mb-6">
+                            <h3 className="text-xl font-bold text-green-800 mb-4">✅ จุดแข็ง</h3>
+                            <ul className="space-y-2">
+                                {selectedSession.aiFeedback.strengths.map((s, i) => (
+                                    <li key={i} className="flex items-start">
+                                        <span className="text-green-600 mr-2">•</span>
+                                        <span>{s}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+
+                        {/* Improvements */}
+                        <div className="bg-orange-50 rounded-2xl p-6 mb-6">
+                            <h3 className="text-xl font-bold text-orange-800 mb-4">⚠️ จุดที่ควรปรับปรุง</h3>
+                            <ul className="space-y-2">
+                                {selectedSession.aiFeedback.improvements.map((imp, i) => (
+                                    <li key={i} className="flex items-start">
+                                        <span className="text-orange-600 mr-2">•</span>
+                                        <span>{imp}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+
+                        {/* Transcript */}
+                        <div className="bg-gray-50 rounded-2xl p-6">
+                            <h3 className="text-xl font-bold text-gray-800 mb-4">📝 Transcript</h3>
+                            <div className="space-y-2 max-h-60 overflow-y-auto">
+                                {Array.isArray(selectedSession.transcript) ? (
+                                    selectedSession.transcript.map((seg, i) => (
+                                        <div key={i} className="text-sm">
+                                            <span className="text-purple-600 font-mono text-xs">
+                                                [{seg.startTime?.toFixed(1) || '0.0'}s-{seg.endTime?.toFixed(1) || '0.0'}s]
+                                            </span>
+                                            <span className="ml-2">{seg.text}</span>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedSession.transcript || "ไม่มี Transcript"}</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// Settings View
+function SettingsView({ apiKey, setApiKey }) {
+    const [tempKey, setTempKey] = useState(apiKey);
+
+    // Sync tempKey with apiKey when it changes from external sources
+    useEffect(() => {
+        setTempKey(apiKey);
+    }, [apiKey]);
+
+    function handleSave() {
+        const trimmedKey = tempKey.trim();
+        setApiKey(trimmedKey);
+        console.log('💾 Saved API Key:', trimmedKey.substring(0, 10) + '...');
+        alert('บันทึก API Key สำเร็จ!');
+    }
+
+    return (
+        <div className="glass-effect rounded-3xl p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">⚙️ ตั้งค่า</h2>
+
+            <div className="mb-6">
+                <label className="block text-gray-700 font-semibold mb-2">
+                    🔑 Gemini API Key
+                </label>
+                <input
+                    type="password"
+                    value={tempKey}
+                    onChange={(e) => setTempKey(e.target.value)}
+                    placeholder="AIzaSy..."
+                    className="w-full px-4 py-3 border-2 border-purple-200 rounded-xl focus:border-purple-500 focus:outline-none mb-2"
+                />
+                <p className="text-sm text-gray-500 mb-4">
+                    ได้ฟรีที่: <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-purple-600 underline">aistudio.google.com</a>
+                </p>
+                <button
+                    onClick={handleSave}
+                    className="bg-purple-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-purple-700 transition"
+                >
+                    💾 บันทึก
+                </button>
+            </div>
+
+            <div className="bg-blue-50 p-4 rounded-xl">
+                <h4 className="font-semibold text-blue-600 mb-2">💡 ทำไมต้องใส่ API Key?</h4>
+                <ul className="text-sm text-gray-700 space-y-1">
+                    <li>✅ รับ AI Feedback อัตโนมัติ</li>
+                    <li>✅ วิเคราะห์การพูดแบบละเอียด</li>
+                    <li>✅ คะแนนที่แม่นยำกว่า</li>
+                    <li>✅ คำแนะนำเฉพาะบุคคล</li>
+                </ul>
+            </div>
+
+            <div className="mt-6 bg-yellow-50 p-4 rounded-xl">
+                <h4 className="font-semibold text-yellow-600 mb-2">⚠️ ความปลอดภัย</h4>
+                <p className="text-sm text-gray-700">
+                    API Key เก็บใน browser ของคุณเท่านั้น ไม่ส่งไปที่ไหน นอกจาก Google AI
+                </p>
+            </div>
+        </div>
+    );
+}
+
+// Helper
+function calculateStreak(sessions) {
+    if (sessions.length === 0) return 0;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let streak = 0;
+    let checkDate = new Date(today);
+
+    for (let i = sessions.length - 1; i >= 0; i--) {
+        const sessionDate = new Date(sessions[i].date);
+        sessionDate.setHours(0, 0, 0, 0);
+
+        if (sessionDate.getTime() === checkDate.getTime()) {
+            streak++;
+            checkDate.setDate(checkDate.getDate() - 1);
+        } else if (sessionDate.getTime() < checkDate.getTime()) {
+            break;
+        }
+    }
+
+    return streak;
+}
+
+// Render
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
