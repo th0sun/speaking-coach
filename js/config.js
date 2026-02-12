@@ -1,7 +1,7 @@
 // Configuration
 const CONFIG = {
     // Backend API URL
-    BACKEND_URL: 'http://localhost:5001',
+    BACKEND_URL: 'https://speaking-coach.onrender.com',
 
     // App settings
     APP_VERSION: '2.0',
