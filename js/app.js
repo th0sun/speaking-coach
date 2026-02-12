@@ -553,7 +553,11 @@ function App() {
     const [isTimerRunning, setIsTimerRunning] = useState(false);
     const [sessions, setSessions] = useState([]);
     const [todayCompleted, setTodayCompleted] = useState(false);
-    const [apiKey, setApiKey] = useState('');
+
+    // API Key Management (Multi-key support)
+    const [apiKeys, setApiKeys] = useState([]);
+    const [activeKeyId, setActiveKeyId] = useState(null);
+
     const [isRecording, setIsRecording] = useState(false);
     const [mediaRecorder, setMediaRecorder] = useState(null);
     const [recordedBlob, setRecordedBlob] = useState(null);
@@ -567,6 +571,13 @@ function App() {
     const [liveTranscript, setLiveTranscript] = useState('');
     const [currentSentenceIndex, setCurrentSentenceIndex] = useState(-1);
     const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+    const [lastRecording, setLastRecording] = useState(null); // For re-analyze feature
+
+    // NEW: AI Chat
+    const [chatMessages, setChatMessages] = useState([]);
+    const [chatInput, setChatInput] = useState('');
+    const [isChatLoading, setIsChatLoading] = useState(false);
+
 
     const aiCoach = useRef(null);
     const recognition = useRef(null);
@@ -633,8 +644,138 @@ function App() {
             if (completedToday) setTodayCompleted(completedToday === 'true');
         }
 
-        if (savedApiKey) setApiKey(savedApiKey);
+        // Load API Keys (with migration from old single-key format)
+        const savedApiKeys = localStorage.getItem('api_keys');
+        const savedActiveKeyId = localStorage.getItem('active_key_id');
+        const oldApiKey = localStorage.getItem('api_key'); // Legacy single key
+
+        if (savedApiKeys) {
+            const keys = JSON.parse(savedApiKeys);
+            setApiKeys(keys);
+            setActiveKeyId(savedActiveKeyId || (keys.length > 0 ? keys[0].id : null));
+        } else if (oldApiKey) {
+            // Migrate old single key to new format
+            const migratedKey = {
+                id: Date.now().toString(),
+                key: oldApiKey,
+                name: 'Main Key',
+                lastUsed: new Date().toISOString(),
+                last429: null,
+                errorCount: 0,
+                successCount: 0,
+                isActive: true
+            };
+            setApiKeys([migratedKey]);
+            setActiveKeyId(migratedKey.id);
+            localStorage.setItem('api_keys', JSON.stringify([migratedKey]));
+            localStorage.setItem('active_key_id', migratedKey.id);
+        }
+
         if (savedAchievements) setAchievements(JSON.parse(savedAchievements));
+    }
+
+    // ===== API Key Management Functions =====
+
+    function getActiveKey() {
+        if (!activeKeyId || apiKeys.length === 0) return null;
+        return apiKeys.find(k => k.id === activeKeyId) || apiKeys[0];
+    }
+
+    function addApiKey(key, name = '') {
+        const newKey = {
+            id: Date.now().toString(),
+            key: key.trim(),
+            name: name.trim() || `Key ${apiKeys.length + 1}`,
+            lastUsed: null,
+            last429: null,
+            errorCount: 0,
+            successCount: 0,
+            isActive: false
+        };
+
+        const updated = [...apiKeys, newKey];
+        setApiKeys(updated);
+        localStorage.setItem('api_keys', JSON.stringify(updated));
+
+        // Set as active if it's the first key
+        if (apiKeys.length === 0) {
+            setActiveKeyId(newKey.id);
+            localStorage.setItem('active_key_id', newKey.id);
+        }
+
+        return newKey;
+    }
+
+    function deleteApiKey(keyId) {
+        const updated = apiKeys.filter(k => k.id !== keyId);
+        setApiKeys(updated);
+        localStorage.setItem('api_keys', JSON.stringify(updated));
+
+        // If deleted key was active, switch to first available
+        if (keyId === activeKeyId) {
+            const newActiveId = updated.length > 0 ? updated[0].id : null;
+            setActiveKeyId(newActiveId);
+            localStorage.setItem('active_key_id', newActiveId || '');
+        }
+    }
+
+    function setActiveKey(keyId) {
+        setActiveKeyId(keyId);
+        localStorage.setItem('active_key_id', keyId);
+    }
+
+    function updateKeyStats(keyId, type, error = null) {
+        const updated = apiKeys.map(k => {
+            if (k.id !== keyId) return k;
+
+            const stats = { ...k };
+            stats.lastUsed = new Date().toISOString();
+
+            if (type === 'success') {
+                stats.successCount++;
+            } else if (type === 'error') {
+                stats.errorCount++;
+                if (error?.status === 429) {
+                    stats.last429 = new Date().toISOString();
+                }
+            }
+
+            return stats;
+        });
+
+        setApiKeys(updated);
+        localStorage.setItem('api_keys', JSON.stringify(updated));
+    }
+
+    function rotateToNextKey() {
+        const currentIndex = apiKeys.findIndex(k => k.id === activeKeyId);
+
+        // Try to find next available key (not recently hit 429)
+        const now = new Date();
+        for (let i = 1; i <= apiKeys.length; i++) {
+            const nextIndex = (currentIndex + i) % apiKeys.length;
+            const nextKey = apiKeys[nextIndex];
+
+            // Check if key is usable (no recent 429 or 429 was more than 1 hour ago)
+            if (!nextKey.last429) {
+                setActiveKey(nextKey.id);
+                console.log(`🔄 Rotated to Key: ${nextKey.name}`);
+                return nextKey;
+            }
+
+            const last429Time = new Date(nextKey.last429);
+            const hoursSince429 = (now - last429Time) / (1000 * 60 * 60);
+
+            if (hoursSince429 > 1) {
+                setActiveKey(nextKey.id);
+                console.log(`🔄 Rotated to Key: ${nextKey.name} (cooldown passed)`);
+                return nextKey;
+            }
+        }
+
+        // If all keys are exhausted, return null
+        console.warn('⚠️ All API keys exhausted');
+        return null;
     }
 
     function saveProgress(day, newSessions) {
@@ -900,9 +1041,11 @@ function App() {
         setLiveTranscript('');
     }
 
-    async function analyzeWithAI() {
-        if (!apiKey) {
-            alert('กรุณาใส่ Gemini API Key ในหน้าตั้งค่าก่อน');
+    async function analyzeWithAI(savedTranscript = null, savedTimer = null) {
+        const activeKey = getActiveKey();
+
+        if (!activeKey) {
+            alert('กรุณาเพิ่ม Gemini API Key ในหน้าตั้งค่าก่อน');
             return;
         }
 
@@ -910,29 +1053,164 @@ function App() {
 
         const { weekData, topicData } = getTodayData();
 
+        // Use saved data if provided (for re-analysis), otherwise use current state
+        const useTranscript = savedTranscript || transcript;
+        const useDuration = savedTimer !== null ? savedTimer : timer;
+
+        // Save current recording for potential re-analysis (only if not already re-analyzing)
+        if (!savedTranscript) {
+            setLastRecording({
+                transcript: transcript,
+                timer: timer,
+                timestamp: new Date().toISOString()
+            });
+        }
+
         // Handle undefined or empty transcript
-        const transcriptData = (transcript && transcript.length > 0)
-            ? transcript
+        const transcriptData = (useTranscript && useTranscript.length > 0)
+            ? useTranscript
             : "ไม่มี transcript (Speech Recognition อาจไม่รองรับในบราวเซอร์นี้)";
 
-        console.log('🤖 Starting AI analysis...');
+        console.log('🤖 Starting AI analysis with rotation...');
         console.log('Transcript data:', transcriptData);
-        console.log('Is array?', Array.isArray(transcriptData), 'Length:', Array.isArray(transcriptData) ? transcriptData.length : 'N/A');
 
-        // Pass sessions for progress comparison
-        const feedback = await aiCoach.current.analyzeSpeech(
-            apiKey, // Pass API Key
-            transcriptData,
-            timer,
-            weekData,
-            topicData,
-            sessions  // เพิ่ม sessions เพื่อเปรียบเทียบความก้าวหน้า
-        );
+        // **Auto-Rotation Logic**: Try all keys until one succeeds
+        let feedback = null;
+        let attempts = 0;
+        let currentKey = activeKey;
 
-        console.log('✅ AI analysis complete:', feedback);
+        while (attempts < apiKeys.length && !feedback) {
+            try {
+                console.log(`Attempt ${attempts + 1}: Using ${currentKey.name}`);
+
+                // Pass sessions for progress comparison
+                feedback = await aiCoach.current.analyzeSpeech(
+                    currentKey.key, // Pass the actual API key
+                    transcriptData,
+                    useDuration,
+                    weekData,
+                    topicData,
+                    sessions
+                );
+
+                // Success!
+                updateKeyStats(currentKey.id, 'success');
+                console.log('✅ AI analysis complete:', feedback);
+
+            } catch (error) {
+                console.error(`❌ Error with ${currentKey.name}:`, error);
+
+                // Check if it's a 429 error
+                if (error.status === 429 || error.message?.includes('429')) {
+                    updateKeyStats(currentKey.id, 'error', { status: 429 });
+                    alert(`⚠️ ${currentKey.name} หมด Quota แล้ว กำลังลองใช้ Key อื่น...`);
+
+                    // Rotate to next key
+                    const nextKey = rotateToNextKey();
+                    if (!nextKey) {
+                        alert('🚫 API Keys ทุกตัวหมด Quota แล้ว กรุณารอหรือเพิ่ม Key ใหม่');
+                        break;
+                    }
+                    currentKey = nextKey;
+                    attempts++;
+                } else {
+                    // Other errors (network, etc.)
+                    updateKeyStats(currentKey.id, 'error', error);
+                    alert(`เกิดข้อผิดพลาด: ${error.message}`);
+                    break;
+                }
+            }
+        }
+
         setAiFeedback(feedback);
         setIsAnalyzing(false);
     }
+
+    async function sendChatMessage(userMessage) {
+        if (!userMessage.trim()) return;
+
+        const activeKey = getActiveKey();
+        if (!activeKey) {
+            alert('กรุณาเพิ่ม API Key ก่อน');
+            return;
+        }
+
+        if (!aiFeedback) {
+            alert('ต้องมีผลการวิเคราะห์ก่อนถึงจะแชทได้');
+            return;
+        }
+
+        // Add user message to chat
+        const userMsg = {
+            role: 'user',
+            content: userMessage,
+            timestamp: new Date().toISOString()
+        };
+        setChatMessages(prev => [...prev, userMsg]);
+        setChatInput('');
+        setIsChatLoading(true);
+
+        try {
+            // Build context for AI
+            const contextPrompt = `You are a speaking coach assistant. The user just completed a speaking session and received feedback. Now they want to ask you follow-up questions.
+
+**Session Information:**
+- Duration: ${timer} seconds
+- Transcript: ${JSON.stringify(transcript)}
+
+**AI Feedback Given:**
+${JSON.stringify(aiFeedback, null, 2)}
+
+**Previous Conversation:**
+${chatMessages.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n')}
+
+**User Question:**
+${userMessage}
+
+**Instructions:**
+- Answer in Thai language
+- Be specific and reference the transcript or feedback scores
+- Keep answers concise but helpful
+- If asked about specific parts, quote from the transcript
+- Be encouraging and constructive`;
+
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${CONFIG.GEMINI_MODEL}:generateContent?key=${activeKey.key}`;
+
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: contextPrompt }] }]
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`API Error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || 'ขอโทษครับ ไม่สามารถตอบได้';
+
+            // Add AI response to chat
+            const aiMsg = {
+                role: 'assistant',
+                content: aiResponse,
+                timestamp: new Date().toISOString()
+            };
+            setChatMessages(prev => [...prev, aiMsg]);
+            updateKeyStats(activeKey.id, 'success');
+
+        } catch (error) {
+            console.error('Chat error:', error);
+            alert('เกิดข้อผิดพลาดในการแชท');
+            if (activeKey) {
+                updateKeyStats(activeKey.id, 'error', error);
+            }
+        } finally {
+            setIsChatLoading(false);
+        }
+    }
+
 
     async function completeSession(manualScore, notes) {
         const score = aiFeedback ? aiFeedback.scores.overall : manualScore;
@@ -953,7 +1231,7 @@ function App() {
         setTodayCompleted(true);
 
         saveProgress(currentDay, newSessions);
-        localStorage.setItem(`completed_day_${currentDay}`, 'true');
+        localStorage.setItem(`completed_day_${currentDay} `, 'true');
 
         // Check achievements
         checkAchievements(newSessions, score);
@@ -971,7 +1249,7 @@ function App() {
                 setCurrentDay(nextDay);
                 setTodayCompleted(false);
                 localStorage.setItem('current_day', nextDay.toString());
-                localStorage.removeItem(`completed_day_${nextDay}`);
+                localStorage.removeItem(`completed_day_${nextDay} `);
             }, 2000);
         }
     }
@@ -1104,31 +1382,31 @@ function App() {
                     <div className="flex flex-wrap gap-2">
                         <button
                             onClick={() => setCurrentView('dashboard')}
-                            className={`px-4 py-2 rounded-lg font-semibold transition ${currentView === 'dashboard' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'}`}
+                            className={`px - 4 py - 2 rounded - lg font - semibold transition ${currentView === 'dashboard' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'} `}
                         >
                             📊 Dashboard
                         </button>
                         <button
                             onClick={() => setCurrentView('training')}
-                            className={`px-4 py-2 rounded-lg font-semibold transition ${currentView === 'training' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'}`}
+                            className={`px - 4 py - 2 rounded - lg font - semibold transition ${currentView === 'training' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'} `}
                         >
                             💪 ฝึกวันนี้
                         </button>
                         <button
                             onClick={() => setCurrentView('words')}
-                            className={`px-4 py-2 rounded-lg font-semibold transition ${currentView === 'words' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'}`}
+                            className={`px - 4 py - 2 rounded - lg font - semibold transition ${currentView === 'words' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'} `}
                         >
                             📚 Power Words
                         </button>
                         <button
                             onClick={() => setCurrentView('progress')}
-                            className={`px-4 py-2 rounded-lg font-semibold transition ${currentView === 'progress' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'}`}
+                            className={`px - 4 py - 2 rounded - lg font - semibold transition ${currentView === 'progress' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'} `}
                         >
                             📈 ความคืบหน้า
                         </button>
                         <button
                             onClick={() => setCurrentView('settings')}
-                            className={`px-4 py-2 rounded-lg font-semibold transition ${currentView === 'settings' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'}`}
+                            className={`px - 4 py - 2 rounded - lg font - semibold transition ${currentView === 'settings' ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-600'} `}
                         >
                             ⚙️ ตั้งค่า
                         </button>
@@ -1164,7 +1442,6 @@ function App() {
                         analyzeWithAI={analyzeWithAI}
                         aiFeedback={aiFeedback}
                         isAnalyzing={isAnalyzing}
-                        hasApiKey={!!apiKey}
                         transcript={transcript}
                         liveTranscript={liveTranscript}
                         audioPlayerRef={audioPlayer}
@@ -1172,6 +1449,13 @@ function App() {
                         setCurrentSentenceIndex={setCurrentSentenceIndex}
                         audioCurrentTime={audioCurrentTime}
                         setAudioCurrentTime={setAudioCurrentTime}
+                        lastRecording={lastRecording}
+                        chatMessages={chatMessages}
+                        chatInput={chatInput}
+                        setChatInput={setChatInput}
+                        isChatLoading={isChatLoading}
+                        sendChatMessage={sendChatMessage}
+                        hasApiKey={apiKeys.length > 0}
                     />
                 )}
 
@@ -1196,8 +1480,11 @@ function App() {
 
                 {currentView === 'settings' && (
                     <SettingsView
-                        apiKey={apiKey}
-                        setApiKey={setApiKey}
+                        apiKeys={apiKeys}
+                        activeKeyId={activeKeyId}
+                        addApiKey={addApiKey}
+                        deleteApiKey={deleteApiKey}
+                        setActiveKey={setActiveKey}
                     />
                 )}
             </div>
@@ -1228,7 +1515,7 @@ function Dashboard({ currentDay, weekData, sessions, todayCompleted, setCurrentV
                 <div className="w-full bg-gray-200 rounded-full h-4 mb-6">
                     <div
                         className="bg-gradient-to-r from-purple-500 to-pink-500 h-4 rounded-full transition-all duration-500"
-                        style={{ width: `${progress}%` }}
+                        style={{ width: `${progress}% ` }}
                     ></div>
                 </div>
 
@@ -1303,7 +1590,8 @@ function TrainingView({ currentDay, topicData, weekData, timer, isTimerRunning, 
     startRecording, stopRecording, resetTimer, completeSession, todayCompleted,
     recordedBlob, analyzeWithAI, aiFeedback, isAnalyzing, hasApiKey,
     transcript, liveTranscript, audioPlayerRef, currentSentenceIndex,
-    setCurrentSentenceIndex, audioCurrentTime, setAudioCurrentTime }) {
+    setCurrentSentenceIndex, audioCurrentTime, setAudioCurrentTime, lastRecording,
+    chatMessages, chatInput, setChatInput, isChatLoading, sendChatMessage }) {
     const [score, setScore] = useState(5);
     const [notes, setNotes] = useState('');
     const [showCompleteForm, setShowCompleteForm] = useState(false);
@@ -1311,7 +1599,7 @@ function TrainingView({ currentDay, topicData, weekData, timer, isTimerRunning, 
     function formatTime(seconds) {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')} `;
     }
 
     function handleComplete() {
@@ -1335,6 +1623,16 @@ function TrainingView({ currentDay, topicData, weekData, timer, isTimerRunning, 
         setNotes('');
         resetTimer();
     }
+
+    function handleReAnalyze() {
+        if (!lastRecording) {
+            alert('ไม่พบข้อมูลการอัดเสียงที่บันทึกไว้');
+            return;
+        }
+        console.log('🔄 Re-analyzing with saved recording:', lastRecording);
+        analyzeWithAI(lastRecording.transcript, lastRecording.timer);
+    }
+
 
     if (todayCompleted) {
         return (
@@ -1370,7 +1668,7 @@ function TrainingView({ currentDay, topicData, weekData, timer, isTimerRunning, 
 
             {/* Timer & Recording */}
             <div className="glass-effect rounded-3xl p-8 shadow-2xl text-center">
-                <div className={`timer-display mb-6 ${isRecording ? 'text-red-600' : 'text-purple-600'}`}>
+                <div className={`timer - display mb - 6 ${isRecording ? 'text-red-600' : 'text-purple-600'} `}>
                     {formatTime(timer)}
                 </div>
 
@@ -1569,9 +1867,9 @@ function TrainingView({ currentDay, topicData, weekData, timer, isTimerRunning, 
                                 <span>📈</span> ความก้าวหน้า (เทียบกับครั้งก่อน)
                             </h4>
                             <div className="flex items-center mb-4">
-                                <div className={`text-lg font-bold px-3 py-1 rounded-full ${aiFeedback.progression.comparedToPrevious === 'ดีขึ้น' ? 'bg-green-100 text-green-700' :
+                                <div className={`text - lg font - bold px - 3 py - 1 rounded - full ${aiFeedback.progression.comparedToPrevious === 'ดีขึ้น' ? 'bg-green-100 text-green-700' :
                                     aiFeedback.progression.comparedToPrevious === 'แย่ลง' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
-                                    }`}>
+                                    } `}>
                                     {aiFeedback.progression.comparedToPrevious}
                                 </div>
                                 <div className="ml-4 text-blue-700">
@@ -1640,6 +1938,95 @@ function TrainingView({ currentDay, topicData, weekData, timer, isTimerRunning, 
                     )}
                 </div>
             )}
+
+            {/* Re-analyze Button */}
+            {lastRecording && !isAnalyzing && (
+                <div className="glass-effect rounded-3xl p-6 shadow-xl bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                        <div>
+                            <h4 className="font-bold text-gray-800 mb-1 flex items-center gap-2">
+                                <span>💾</span> มีข้อมูลการอัดเสียงที่บันทึกไว้
+                            </h4>
+                            <p className="text-sm text-gray-600">
+                                สามารถวิเคราะห์ใหม่ได้โดยไม่ต้องพูดใหม่
+                            </p>
+                        </div>
+                        <button
+                            onClick={handleReAnalyze}
+                            className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-6 py-3 rounded-xl font-bold hover:shadow-xl transition transform hover:scale-105 flex items-center gap-2"
+                        >
+                            <span>🔄</span> วิเคราะห์ใหม่
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* AI Chat Interface */}
+            {aiFeedback && (
+                <div className="glass-effect rounded-3xl p-8 shadow-2xl">
+                    <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                        <span>💬</span> คุยกับ AI ต่อ
+                    </h3>
+
+                    {chatMessages.length === 0 ? (
+                        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 mb-6">
+                            <p className="text-blue-700 text-sm mb-3">
+                                💡 ตัวอย่างคำถามที่คุณสามารถถาม:
+                            </p>
+                            <ul className="text-sm text-gray-700 space-y-2">
+                                <li>• ทำไมคะแนน Pace ถึงต่ำ?</li>
+                                <li>• ช่วงไหนที่พูดดีสุด?</li>
+                                <li>• ควรพัฒนาอะไรก่อน?</li>
+                                <li>• มีแนวทางฝึกอะไรไหม?</li>
+                            </ul>
+                        </div>
+                    ) : (
+                        <div className="space-y-4 mb-6  max-h-96 overflow-y-auto">
+                            {chatMessages.map((msg, idx) => (
+                                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`max-w-md px-4 py-3 rounded-xl ${msg.role === 'user'
+                                        ? 'bg-purple-600 text-white'
+                                        : 'bg-gray-100 text-gray-800'
+                                        }`}>
+                                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                    </div>
+                                </div>
+                            ))}
+                            {isChatLoading && (
+                                <div className="flex justify-start">
+                                    <div className="bg-gray-100 px-4 py-3 rounded-xl">
+                                        <p className="text-sm text-gray-600">AI กำลังคิด...</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            value={chatInput}
+                            onChange={(e) => setChatInput(e.target.value)}
+                            onKeyPress={(e) => {
+                                if (e.key === 'Enter' && !isChatLoading) {
+                                    sendChatMessage(chatInput);
+                                }
+                            }}
+                            placeholder="พิมพ์คำถาม..."
+                            disabled={isChatLoading}
+                            className="flex-1 px-4 py-3 border-2 border-purple-200 rounded-xl focus:border-purple-500 focus:outline-none disabled:bg-gray-100"
+                        />
+                        <button
+                            onClick={() => sendChatMessage(chatInput)}
+                            disabled={isChatLoading || !chatInput.trim()}
+                            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-bold hover:shadow-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            ส่ง
+                        </button>
+                    </div>
+                </div>
+            )}
+
 
             {/* Complete Form */}
             {showCompleteForm && (
@@ -1759,7 +2146,7 @@ function ProgressView({ sessions, currentDay, resetProgress, exportToJSON, impor
                                 <div key={idx} className="flex-1 flex flex-col items-center gap-2">
                                     <div
                                         className="w-full bg-gradient-to-t from-purple-600 to-pink-500 rounded-t-lg"
-                                        style={{ height: `${(session.score / 10) * 100}%` }}
+                                        style={{ height: `${(session.score / 10) * 100}% ` }}
                                     ></div>
                                     <div className="text-xs text-gray-600">D{session.day}</div>
                                 </div>
@@ -1873,9 +2260,9 @@ function ProgressView({ sessions, currentDay, resetProgress, exportToJSON, impor
                                 <h3 className="text-xl font-bold text-green-800 mb-4">📈 ความก้าวหน้า</h3>
                                 <div className="mb-4">
                                     <span className="font-semibold">เปรีย บเทียบกับครั้งก่อน:</span>
-                                    <span className={`ml-2 font-bold ${selectedSession.aiFeedback.progression.comparedToPrevious === 'ดีขึ้น' ? 'text-green-600' :
+                                    <span className={`ml - 2 font - bold ${selectedSession.aiFeedback.progression.comparedToPrevious === 'ดีขึ้น' ? 'text-green-600' :
                                         selectedSession.aiFeedback.progression.comparedToPrevious === 'แย่ลง' ? 'text-red-600' : 'text-gray-600'
-                                        }`}>{selectedSession.aiFeedback.progression.comparedToPrevious}</span>
+                                        } `}>{selectedSession.aiFeedback.progression.comparedToPrevious}</span>
                                     <span className="ml-4">Progress Score: <span className="font-bold">{selectedSession.aiFeedback.progression.progressScore}/10</span></span>
                                 </div>
                                 {selectedSession.aiFeedback.progression.improvements && selectedSession.aiFeedback.progression.improvements.length > 0 && (
@@ -1949,62 +2336,186 @@ function ProgressView({ sessions, currentDay, resetProgress, exportToJSON, impor
 }
 
 // Settings View
-function SettingsView({ apiKey, setApiKey }) {
-    const [tempKey, setTempKey] = useState(apiKey);
+function SettingsView({ apiKeys, activeKeyId, addApiKey, deleteApiKey, setActiveKey }) {
+    const [newKey, setNewKey] = useState('');
+    const [newKeyName, setNewKeyName] = useState('');
 
-    // Sync tempKey with apiKey when it changes from external sources
-    useEffect(() => {
-        setTempKey(apiKey);
-    }, [apiKey]);
+    function handleAddKey() {
+        if (!newKey.trim()) {
+            alert('กรุณาใส่ API Key');
+            return;
+        }
 
-    function handleSave() {
-        const trimmedKey = tempKey.trim();
-        setApiKey(trimmedKey);
-        console.log('💾 Saved API Key:', trimmedKey.substring(0, 10) + '...');
-        alert('บันทึก API Key สำเร็จ!');
+        const added = addApiKey(newKey, newKeyName);
+        setNewKey('');
+        setNewKeyName('');
+        alert(`✅ เพิ่ม "${added.name}" สำเร็จ!`);
+    }
+
+    function handleDelete(keyId, keyName) {
+        if (confirm(`ลบ "${keyName}" ใช่ไหม ? `)) {
+            deleteApiKey(keyId);
+            alert('ลบสำเร็จ');
+        }
+    }
+
+    function formatDate(isoString) {
+        if (!isoString) return 'Never';
+        const date = new Date(isoString);
+        return date.toLocaleString('th-TH', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    function getKeyStatus(key) {
+        if (!key.last429) return { text: 'Active', color: 'green', icon: '🟢' };
+
+        const now = new Date();
+        const last429Time = new Date(key.last429);
+        const hoursSince = (now - last429Time) / (1000 * 60 * 60);
+
+        if (hoursSince < 1) {
+            return { text: 'Exhausted', color: 'red', icon: '🔴' };
+        } else {
+            return { text: 'Recovered', color: 'yellow', icon: '🟡' };
+        }
     }
 
     return (
-        <div className="glass-effect rounded-3xl p-8 shadow-2xl">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">⚙️ ตั้งค่า</h2>
+        <div className="space-y-6">
+            {/* API Key List */}
+            <div className="glass-effect rounded-3xl p-8 shadow-2xl">
+                <h2 className="text-2xl font-bold text-gray-800 mb-6">🔑 API Key Manager</h2>
 
-            <div className="mb-6">
-                <label className="block text-gray-700 font-semibold mb-2">
-                    🔑 Gemini API Key
-                </label>
-                <input
-                    type="password"
-                    value={tempKey}
-                    onChange={(e) => setTempKey(e.target.value)}
-                    placeholder="AIzaSy..."
-                    className="w-full px-4 py-3 border-2 border-purple-200 rounded-xl focus:border-purple-500 focus:outline-none mb-2"
-                />
-                <p className="text-sm text-gray-500 mb-4">
-                    ได้ฟรีที่: <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-purple-600 underline">aistudio.google.com</a>
-                </p>
-                <button
-                    onClick={handleSave}
-                    className="bg-purple-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-purple-700 transition"
-                >
-                    💾 บันทึก
-                </button>
+                {apiKeys.length === 0 ? (
+                    <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-6 text-center">
+                        <p className="text-yellow-700 font-semibold mb-2">⚠️ ยังไม่มี API Key</p>
+                        <p className="text-sm text-gray-600">เพิ่ม API Key ด้านล่างเพื่อเริ่มใช้งาน AI</p>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        {apiKeys.map(key => {
+                            const status = getKeyStatus(key);
+                            const isActive = key.id === activeKeyId;
+
+                            return (
+                                <div
+                                    key={key.id}
+                                    className={`border - 2 rounded - xl p - 4 ${isActive ? 'border-purple-500 bg-purple-50' : 'border-gray-200 bg-white'} `}
+                                >
+                                    <div className="flex items-start justify-between flex-wrap gap-3">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <h3 className="font-bold text-gray-800">{key.name}</h3>
+                                                {isActive && <span className="bg-purple-600 text-white text-xs px-2 py-1 rounded">Active</span>}
+                                                <span className={`text - xs px - 2 py - 1 rounded bg - ${status.color} -100 text - ${status.color} -700`}>
+                                                    {status.icon} {status.text}
+                                                </span>
+                                            </div>
+
+                                            <p className="text-xs text-gray-500 font-mono mb-3">
+                                                {key.key.substring(0, 15)}...{key.key.substring(key.key.length - 5)}
+                                            </p>
+
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                                                <div>
+                                                    <p className="text-gray-500">Last Used:</p>
+                                                    <p className="font-semibold">{formatDate(key.lastUsed)}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-gray-500">Last 429:</p>
+                                                    <p className="font-semibold">{formatDate(key.last429)}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-gray-500">Success:</p>
+                                                    <p className="font-semibold text-green-600">{key.successCount}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-gray-500">Errors:</p>
+                                                    <p className="font-semibold text-red-600">{key.errorCount}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex gap-2">
+                                            {!isActive && (
+                                                <button
+                                                    onClick={() => setActiveKey(key.id)}
+                                                    className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700 transition"
+                                                >
+                                                    Set Active
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => handleDelete(key.id, key.name)}
+                                                className="bg-red-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-red-600 transition"
+                                            >
+                                                🗑️
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
 
-            <div className="bg-blue-50 p-4 rounded-xl">
-                <h4 className="font-semibold text-blue-600 mb-2">💡 ทำไมต้องใส่ API Key?</h4>
-                <ul className="text-sm text-gray-700 space-y-1">
-                    <li>✅ รับ AI Feedback อัตโนมัติ</li>
-                    <li>✅ วิเคราะห์การพูดแบบละเอียด</li>
-                    <li>✅ คะแนนที่แม่นยำกว่า</li>
-                    <li>✅ คำแนะนำเฉพาะบุคคล</li>
+            {/* Add New Key */}
+            <div className="glass-effect rounded-3xl p-8 shadow-2xl">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">➕ เพิ่ม API Key ใหม่</h3>
+
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-gray-700 font-semibold mb-2">
+                            ชื่อ (ตัวเลือก)
+                        </label>
+                        <input
+                            type="text"
+                            value={newKeyName}
+                            onChange={(e) => setNewKeyName(e.target.value)}
+                            placeholder="เช่น Main Key, Backup Key"
+                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-gray-700 font-semibold mb-2">
+                            🔑 API Key
+                        </label>
+                        <input
+                            type="password"
+                            value={newKey}
+                            onChange={(e) => setNewKey(e.target.value)}
+                            placeholder="AIzaSy..."
+                            className="w-full px-4 py-3 border-2 border-purple-200 rounded-xl focus:border-purple-500 focus:outline-none"
+                        />
+                        <p className="text-sm text-gray-500 mt-2">
+                            ได้ฟรีที่: <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-purple-600 underline">aistudio.google.com</a>
+                        </p>
+                    </div>
+
+                    <button
+                        onClick={handleAddKey}
+                        className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-semibold hover:shadow-xl transition w-full"
+                    >
+                        ➕ เพิ่ม API Key
+                    </button>
+                </div>
+            </div>
+
+            {/* Info */}
+            <div className="glass-effect rounded-3xl p-6 shadow-xl">
+                <h4 className="font-semibold text-blue-600 mb-3">💡 ระบบหมุน Key อัตโนมัติ</h4>
+                <ul className="text-sm text-gray-700 space-y-2">
+                    <li>✅ เมื่อ Key หนึ่งหมด Quota (429) ระบบจะหมุนไปใช้ Key ถัดไปทันที</li>
+                    <li>✅ ไม่มีดาวน์ไทม์ - ฝึกต่อเนื่องได้</li>
+                    <li>✅ ติดตาม Stats แบบ Real-time</li>
+                    <li>⏰ Key ที่หมด Quota จะฟื้นอัตโนมัติหลัง 1 ชั่วโมง</li>
                 </ul>
-            </div>
-
-            <div className="mt-6 bg-yellow-50 p-4 rounded-xl">
-                <h4 className="font-semibold text-yellow-600 mb-2">⚠️ ความปลอดภัย</h4>
-                <p className="text-sm text-gray-700">
-                    API Key เก็บใน browser ของคุณเท่านั้น ไม่ส่งไปที่ไหน นอกจาก Google AI
-                </p>
             </div>
         </div>
     );
