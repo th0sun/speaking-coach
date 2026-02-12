@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 import requests
 import logging
 import base64
+import sqlite3
+import json
 
 # Load environment variables
 load_dotenv()
@@ -141,9 +143,6 @@ def analyze():
         return jsonify({'error': str(e)}), 500
 
 # --- User Authentication & Data APIs ---
-
-import sqlite3
-import json
 
 DB_NAME = "speaking_coach.db"
 
