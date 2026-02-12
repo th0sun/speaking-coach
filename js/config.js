@@ -3,6 +3,9 @@ const CONFIG = {
     // Backend API URL
     BACKEND_URL: 'https://speaking-coach.onrender.com',
 
+    // AI Model
+    GEMINI_MODEL: 'gemini-3-flash-preview',
+
     // App settings
     APP_VERSION: '2.0',
     APP_NAME: 'Speaking Coach Pro',
