@@ -1,4 +1,206 @@
-// AI Coach System (Now uses backend API)
+/**
+ * 🛠️ Speaking Coach Pro - Shared Modules
+ * Contains: Config, Helpers, AudioAnalyzer, AICoach
+ */
+
+// ==========================================
+// 1. CONFIGURATION
+// ==========================================
+const CONFIG = {
+    // Backend API URL
+    BACKEND_URL: 'https://speaking-coach.onrender.com',
+
+    // AI Model
+    GEMINI_MODEL: 'gemini-2.0-flash',
+
+    // App settings
+    APP_VERSION: '3.0',
+    APP_NAME: 'Speaking Coach Pro',
+
+    // Debug mode
+    DEBUG: true,
+
+    // LocalStorage keys
+    STORAGE_KEYS: {
+        API_KEY: 'gemini_api_key',
+        CURRENT_DAY: 'current_day',
+        SESSIONS: 'sessions',
+        ACHIEVEMENTS: 'achievements'
+    }
+};
+
+// Export for use in other files
+window.CONFIG = CONFIG;
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = CONFIG;
+}
+
+// ==========================================
+// 2. HELPER FUNCTIONS
+// ==========================================
+
+// Helper: Convert Blob to Base64
+window.convertBlobToBase64 = async function (blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const base64 = reader.result.split(',')[1]; // Remove data:audio/webm;base64, prefix
+            resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+};
+
+// Helper: Calculate Streak
+window.calculateStreak = function (sessions) {
+    if (!sessions || sessions.length === 0) return 0;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let streak = 0;
+    let checkDate = new Date(today);
+
+    for (let i = sessions.length - 1; i >= 0; i--) {
+        const sessionDate = new Date(sessions[i].date);
+        sessionDate.setHours(0, 0, 0, 0);
+
+        if (sessionDate.getTime() === checkDate.getTime()) {
+            streak++;
+            checkDate.setDate(checkDate.getDate() - 1);
+        } else if (sessionDate.getTime() < checkDate.getTime()) {
+            break;
+        }
+    }
+
+    return streak;
+};
+
+// ==========================================
+// 3. AUDIO ANALYZER SERVICE
+// ==========================================
+
+class AudioAnalyzer {
+    constructor() {
+        this.audioContext = null;
+        this.analyser = null;
+        this.source = null;
+        this.dataArray = null;
+        this.isAnalyzing = false;
+        this.stats = {
+            volume: { min: Infinity, max: -Infinity, sum: 0, count: 0 },
+            pitch: { min: Infinity, max: -Infinity, sum: 0, count: 0 }
+        };
+        this.animationFrame = null;
+    }
+
+    start(stream) {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            this.audioContext = new AudioContext();
+            this.analyser = this.audioContext.createAnalyser();
+            this.source = this.audioContext.createMediaStreamSource(stream);
+            this.source.connect(this.analyser);
+
+            this.analyser.fftSize = 2048;
+            this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+
+            this.isAnalyzing = true;
+            this.resetStats();
+            this.analyze();
+
+            console.log("🔊 Audio Analyzer started");
+        } catch (e) {
+            console.error("❌ Failed to start Audio Analyzer:", e);
+        }
+    }
+
+    resetStats() {
+        this.stats = {
+            volume: { min: Infinity, max: -Infinity, sum: 0, count: 0 },
+            pitch: { min: Infinity, max: -Infinity, sum: 0, count: 0 }
+        };
+    }
+
+    analyze() {
+        if (!this.isAnalyzing) return;
+        this.animationFrame = requestAnimationFrame(() => this.analyze());
+
+        this.analyser.getByteTimeDomainData(this.dataArray);
+
+        // --- Calculate Volume (RMS) ---
+        let sum = 0;
+        for (let i = 0; i < this.dataArray.length; i++) {
+            const x = (this.dataArray[i] - 128) / 128.0;
+            sum += x * x;
+        }
+        const rms = Math.sqrt(sum / this.dataArray.length);
+        const db = 20 * Math.log10(rms + 1e-10); // dB
+
+        // Update Volume stats
+        if (isFinite(db) && db > -100) {
+            this.stats.volume.max = Math.max(this.stats.volume.max, db);
+            this.stats.volume.min = Math.min(this.stats.volume.min, db);
+            this.stats.volume.sum += db;
+            this.stats.volume.count++;
+        }
+
+        // --- Simple Pitch Estimation (Zero Crossing Rate) ---
+        let zeroCrossings = 0;
+        for (let i = 1; i < this.dataArray.length; i++) {
+            if ((this.dataArray[i] - 128) > 0 && (this.dataArray[i - 1] - 128) <= 0) {
+                zeroCrossings++;
+            }
+        }
+
+        const estimatedPitch = (zeroCrossings / this.dataArray.length) * (this.audioContext.sampleRate / 2);
+
+        if (estimatedPitch > 50 && estimatedPitch < 1000) { // Human voice range filter
+            this.stats.pitch.max = Math.max(this.stats.pitch.max, estimatedPitch);
+            this.stats.pitch.min = Math.min(this.stats.pitch.min, estimatedPitch);
+            this.stats.pitch.sum += estimatedPitch;
+            this.stats.pitch.count++;
+        }
+    }
+
+    stop() {
+        this.isAnalyzing = false;
+        if (this.animationFrame) cancelAnimationFrame(this.animationFrame);
+
+        if (this.audioContext) {
+            this.audioContext = null;
+        }
+        console.log("🔇 Audio Analyzer stopped");
+    }
+
+    getStats() {
+        const volAvg = this.stats.volume.count ? (this.stats.volume.sum / this.stats.volume.count) : -100;
+        const pitchAvg = this.stats.pitch.count ? (this.stats.pitch.sum / this.stats.pitch.count) : 0;
+
+        return {
+            volume: {
+                avg: volAvg.toFixed(1),
+                max: this.stats.volume.max !== -Infinity ? this.stats.volume.max.toFixed(1) : -100,
+                min: this.stats.volume.min !== Infinity ? this.stats.volume.min.toFixed(1) : -100
+            },
+            pitch: {
+                avg: pitchAvg.toFixed(0),
+                max: this.stats.pitch.max !== -Infinity ? this.stats.pitch.max.toFixed(0) : 0,
+                min: this.stats.pitch.min !== Infinity ? this.stats.pitch.min.toFixed(0) : 0
+            }
+        };
+    }
+}
+
+// Expose to window
+window.AudioAnalyzer = AudioAnalyzer;
+
+// ==========================================
+// 4. AI COACH SERVICE
+// ==========================================
+
 class AICoach {
     constructor() {
         this.backendURL = CONFIG.BACKEND_URL;
@@ -8,7 +210,7 @@ class AICoach {
         // Handle transcript properly with TIMING information
         let transcriptText = '';
         let timingInfo = '';
-        let pauseAnalysis = '';;
+        let pauseAnalysis = '';
 
         if (!transcript || (Array.isArray(transcript) && transcript.length === 0)) {
             transcriptText = '[ไม่มี transcript - Speech Recognition อาจไม่ทำงาน]';
@@ -188,10 +390,10 @@ ${previousFeedback}
     "comparedToPrevious": "ดีขึ้น/แย่ลง/เท่าเดิม/ครั้งแรก",
     "improvements": [
       "แก้จุดอ่อนเรื่อง X ได้แล้ว",
-      "Pace ดีขึนกว่าครั้งก่อน"
+      "Pace ดีขึ้นกว่าครั้งก่อน"
     ],
     "stillNeedWork": [
-      "ยังต้องปรับปรุงเร ื่อง Y",
+      "ยังต้องปรับปรุงเรื่อง Y",
       "Pauses ยังไม่เหมาะสม"
     ],
     "progressScore": 8,
@@ -224,7 +426,7 @@ ${previousFeedback}
 
 สิ่งสำคัญ:
 - **Prioritize Audio & Metrics:** ให้ความสำคัญสิ่งที่ฟังได้จากเสียงและค่าสถิติ (Volume/Pitch) มากกว่า transcript
-- แยกประโยคและวิเคราะห์ทีพละประโยค
+- แยกประโยคและวิเคราะห์ทีละประโยค
 - ดูว่ามีโครงสร้าง intro-body-conclusion หรือไม่
 - **วิเคราะห์จังหวะการพูดจาก timestamp** (เร็ว/ช้า/สม่ำเสมอ)
 - **วิเคราะห์การหยุดพัก** (เหมาะสม/ไม่เหมาะสม/บ่อยเกิน/น้อยเกิน)
