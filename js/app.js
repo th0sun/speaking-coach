@@ -1096,6 +1096,17 @@ function App() {
             } catch (error) {
                 console.error(`❌ Error with ${currentKey.name}:`, error);
 
+                // Check if it's a 404 (Model Not Found) or 400 (Bad Request)
+                if (error.status === 404 || error.status === 400 || (error.message && (error.message.includes('404') || error.message.includes('400')))) {
+                    console.error('🛑 Critical API Error (404/400). Aborting retries.');
+                    alert(`❌ Model ที่เลือก (${selectedModel}) ไม่สามารถใช้งานได้ (404 Not Found)\nระบบจะรีเซ็ตเป็นค่าเริ่มต้น กรุณาลองใหม่อีกครั้ง`);
+
+                    // Reset to default and stop
+                    setSelectedModel(CONFIG.GEMINI_MODEL);
+                    setIsAnalyzing(false);
+                    return;
+                }
+
                 // Check if it's a 429 error
                 if (error.status === 429 || (error.message && error.message.includes('429'))) {
                     console.warn(`⚠️ ${currentKey.name} 429 Quota Exceeded`);
