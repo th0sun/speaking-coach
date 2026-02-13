@@ -546,10 +546,9 @@ function App() {
 
                 if (!response.ok) {
                     if (response.status === 404 || response.status === 401) {
-                        console.error('❌ User mismatch during save: Logging out...');
-                        localStorage.clear();
-                        alert('Session expired. Please login again to save data.');
-                        window.location.reload();
+                        console.error('❌ User mismatch during save: Server could not find user ID.');
+                        // Only warn, do not force logout immediately to avoid loop
+                        setSaveStatus('error');
                         return;
                     }
                     throw new Error(`Server error: ${response.status}`);
