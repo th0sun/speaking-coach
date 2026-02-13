@@ -1381,7 +1381,16 @@ function App() {
 
                 // Restore Selected Model
                 if (userData.settings.selectedModel) {
-                    setSelectedModel(userData.settings.selectedModel);
+                    // 🛡️ Validate if model still exists in CONFIG
+                    const modelExists = CONFIG.AVAILABLE_MODELS.some(m => m.id === userData.settings.selectedModel);
+                    if (modelExists) {
+                        setSelectedModel(userData.settings.selectedModel);
+                    } else {
+                        console.warn(`⚠️ Saved model ${userData.settings.selectedModel} not found. Resetting to default.`);
+                        setSelectedModel(CONFIG.GEMINI_MODEL);
+                    }
+                } else {
+                    setSelectedModel(CONFIG.GEMINI_MODEL);
                 }
             }
         }
