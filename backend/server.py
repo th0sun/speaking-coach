@@ -382,6 +382,16 @@ def save_data():
                          
                          if existing_user:
                              real_id = existing_user[0]
+                             
+                             # 🚨 Check if the FOUND ID is also unsafe (Legacy Giant ID)
+                             if real_id > MAX_INT:
+                                 logger.warning(f"⚠️ Found user {username} but ID {real_id} is unsafe (Legacy). Deleting to recreate...")
+                                 c.execute("DELETE FROM users WHERE id = %s", (real_id,))
+                                 # Fall through to 'else' to create new user
+                                 existing_user = None 
+                             
+                         if existing_user:
+                             real_id = existing_user[0]
                              logger.info(f"✅ Found map for {username} -> ID {real_id}. Updating...")
                              c.execute("UPDATE users SET data = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", 
                                       (json.dumps(user_data), real_id))

@@ -520,17 +520,31 @@ function App() {
 
     // 2. Save Data on Change (Auto-save)
     const [saveStatus, setSaveStatus] = useState('idle'); // idle, saving, saved, error
+    const lastSavedData = useRef(null); // To prevent spamming saves if data hasn't changed
 
     const saveData = async () => {
         if (!user) return;
 
-        setSaveStatus('saving');
         const dataToSave = {
             currentDay,
             sessions,
             achievements,
-            settings: { apiKeys, selectedModel }
+            settings: { apiKeys, selectedModel },
+            // 💾 Persistence: Save Chat & AI State
+            transcript,
+            aiFeedback,
+            chatMessages,
+            isTodayCompleted
         };
+
+        // 🛑 Spam Prevention: Check if data actually changed
+        const currentJson = JSON.stringify(dataToSave);
+        if (lastSavedData.current === currentJson) {
+            // console.log('Skipping save: Data unchanged');
+            return;
+        }
+
+        setSaveStatus('saving');
 
         let retries = 3;
         while (retries > 0) {
@@ -566,6 +580,9 @@ function App() {
                 }
 
                 console.log('💾 Data saved to cloud ✅');
+                // Update last saved reference
+                lastSavedData.current = currentJson;
+
                 // Also save to localStorage as backup
                 localStorage.setItem('speakingCoach_userData', JSON.stringify(dataToSave));
                 setSaveStatus('saved');
@@ -602,10 +619,10 @@ function App() {
         if (!user) return; // Don't save if not logged in
 
         // Debounce save (wait 1s after last change, then save every 5s)
-        const timeoutId = setTimeout(saveData, 1000);
+        const timeoutId = setTimeout(saveData, 2000); // Increased debounce to 2s
         return () => clearTimeout(timeoutId);
 
-    }, [currentDay, sessions, achievements, apiKeys, user]);
+    }, [currentDay, sessions, achievements, apiKeys, user, transcript, aiFeedback, chatMessages, isTodayCompleted]);
 
     useEffect(() => {
         let interval;
@@ -1413,6 +1430,12 @@ function App() {
             if (userData.currentDay) setCurrentDay(userData.currentDay);
             if (userData.sessions) setSessions(userData.sessions);
             if (userData.achievements) setAchievements(userData.achievements);
+
+            // ♻️ Restore Chat State
+            if (userData.transcript) setTranscript(userData.transcript);
+            if (userData.aiFeedback) setAiFeedback(userData.aiFeedback);
+            if (userData.chatMessages) setChatMessages(userData.chatMessages);
+            if (userData.isTodayCompleted) setTodayCompleted(userData.isTodayCompleted);
 
             // Handle API Keys from backend settings
             if (userData.settings) {
