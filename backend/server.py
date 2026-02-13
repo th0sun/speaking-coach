@@ -42,10 +42,16 @@ if USE_POSTGRES:
             try:
                 logger.info('📥 Downloading CockroachDB root certificate...')
                 # Official CockroachDB cert URL
-                os.system(f"curl --create-dirs -o {cert_path} https://cockroachlabs.cloud/clusters/root.crt")
-                logger.info(f'✅ Certificate downloaded to {cert_path}')
+                url = "https://cockroachlabs.cloud/clusters/root.crt"
+                response = requests.get(url, allow_redirects=True)
+                if response.status_code == 200:
+                    with open(cert_path, 'wb') as f:
+                        f.write(response.content)
+                    logger.info(f'✅ Certificate downloaded to {cert_path}')
+                else:
+                    logger.error(f'❌ Failed to download certificate. Status: {response.status_code}')
             except Exception as e:
-                logger.warning(f'⚠️ Failed to download certificate: {e}')
+                logger.error(f'❌ Failed to download certificate: {e}')
 
     except ImportError:
         logger.warning('⚠️ psycopg2 not installed, falling back to SQLite')
