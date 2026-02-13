@@ -540,6 +540,7 @@ function App() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         user_id: user.id,
+                        username: user.username, // Send username for auto-recovery if DB is wiped
                         data: dataToSave
                     }),
                     timeout: 10000

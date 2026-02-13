@@ -320,8 +320,7 @@ def login():
 @app.route('/api/save_data', methods=['POST'])
 def save_data():
     data = request.json
-    user_id = data.get('user_id')
-    user_data = data.get('data')
+    username = data.get('username') # Optional, for auto-recovery
 
     if not user_id or not user_data:
         return jsonify({'error': 'User ID and Data are required'}), 400
@@ -330,25 +329,57 @@ def save_data():
         if USE_POSTGRES:
             conn = psycopg2.connect(DATABASE_URL, sslrootcert='/tmp/root.crt')
             c = conn.cursor()
+            # Try UPDATE first
             c.execute("UPDATE users SET data = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", 
                      (json.dumps(user_data), user_id))
-            if c.rowcount == 0:
-                 logger.warning(f"⚠️ Save failed: User ID {user_id} not found in DB (Rowcount: 0)")
-                 conn.rollback()
-                 conn.close()
-                 return jsonify({'error': 'User not found or no changes made'}), 404
             
-            logger.info(f"✅ Data updated for usage {user_id}. Rows affected: {c.rowcount}")
+            if c.rowcount == 0:
+                 # ⚠️ User not found (Ghost Session). Try Auto-Recovery if username provided.
+                 if username:
+                     logger.warning(f"👻 Ghost Session detected for ID {user_id} ({username}). Attempting auto-restore...")
+                     try:
+                         # Attempt to INSERT with explicit ID (restoring the user)
+                         c.execute('''
+                            INSERT INTO users (id, username, pin, data) 
+                            VALUES (%s, %s, '000000', %s)
+                         ''', (user_id, username, json.dumps(user_data)))
+                         logger.info(f"✅ Auto-recovered user {username} (ID: {user_id})")
+                     except Exception as insert_err:
+                         # If restore fails (e.g. ID conflict or Username taken by diff ID), fail gracefully
+                         logger.error(f"❌ Auto-recovery failed: {insert_err}")
+                         conn.rollback()
+                         conn.close()
+                         return jsonify({'error': 'User not found and recovery failed'}), 404
+                 else:
+                     conn.rollback()
+                     conn.close()
+                     return jsonify({'error': 'User not found and no username for recovery'}), 404
+            
             conn.commit()
             conn.close()
         else:
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
+            # Try UPDATE first
             c.execute("UPDATE users SET data = ? WHERE id = ?", (json.dumps(user_data), user_id))
+            
             if c.rowcount == 0:
-                 logger.warning(f"⚠️ Save failed: User ID {user_id} not found in DB (Rowcount: 0)")
-                 conn.close()
-                 return jsonify({'error': 'User not found or no changes made'}), 404
+                 # ⚠️ User not found (Ghost Session). Try Auto-Recovery if username provided.
+                 if username:
+                     logger.warning(f"👻 Ghost Session detected for ID {user_id} ({username}). Attempting auto-restore...")
+                     try:
+                         # Attempt to INSERT with explicit ID
+                         c.execute('INSERT INTO users (id, username, pin, data) VALUES (?, ?, ?, ?)', 
+                                  (user_id, username, '000000', json.dumps(user_data)))
+                         logger.info(f"✅ Auto-recovered user {username} (ID: {user_id})")
+                     except Exception as insert_err:
+                         logger.error(f"❌ Auto-recovery failed: {insert_err}")
+                         conn.close()
+                         return jsonify({'error': 'User not found and recovery failed'}), 404
+                 else:
+                     conn.close()
+                     return jsonify({'error': 'User not found and no username for recovery'}), 404
+            
             conn.commit()
             conn.close()
         
