@@ -623,7 +623,7 @@ function App() {
         const timeoutId = setTimeout(saveData, 2000); // Increased debounce to 2s
         return () => clearTimeout(timeoutId);
 
-    }, [currentDay, sessions, achievements, apiKeys, user, transcript, aiFeedback, chatMessages, isTodayCompleted]);
+    }, [currentDay, sessions, achievements, apiKeys, user, transcript, aiFeedback, chatMessages, todayCompleted]);
 
     useEffect(() => {
         let interval;
