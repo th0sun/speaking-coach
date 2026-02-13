@@ -344,16 +344,13 @@ def save_data():
             c = conn.cursor()
             
             # Only try UPDATE if ID is safe
+            rows_affected = 0
             if is_id_safe:
                 c.execute("UPDATE users SET data = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", 
                          (json.dumps(user_data), user_id))
-            else:
-                # Mock rowcount=0 to trigger auto-recovery logic below
-                class MockCursor:
-                    rowcount = 0
-                c = MockCursor() 
+                rows_affected = c.rowcount
             
-            if c.rowcount == 0:
+            if rows_affected == 0:
                  # ⚠️ User not found (Ghost Session). Try Auto-Recovery if username provided.
                  # ⚠️ User not found OR ID unsafe. Try Auto-Recovery.
                  if username:
