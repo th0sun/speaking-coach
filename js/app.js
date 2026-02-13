@@ -507,52 +507,62 @@ function App() {
     }, [user]);
 
     // 2. Save Data on Change (Auto-save)
-    useEffect(() => {
-        if (!user) return; // Don't save if not logged in
+    const [saveStatus, setSaveStatus] = useState('idle'); // idle, saving, saved, error
 
-        const saveData = async () => {
-            const dataToSave = {
-                currentDay,
-                sessions,
-                achievements,
-                settings: { apiKeys }
-            };
+    const saveData = async () => {
+        if (!user) return;
 
-            let retries = 3;
-            while (retries > 0) {
-                try {
-                    const response = await fetch(`${CONFIG.BACKEND_URL}/api/save_data`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            user_id: user.id,
-                            data: dataToSave
-                        }),
-                        timeout: 10000
-                    });
+        setSaveStatus('saving');
+        const dataToSave = {
+            currentDay,
+            sessions,
+            achievements,
+            settings: { apiKeys }
+        };
 
-                    if (!response.ok) {
-                        throw new Error(`Server error: ${response.status}`);
-                    }
+        let retries = 3;
+        while (retries > 0) {
+            try {
+                const response = await fetch(`${CONFIG.BACKEND_URL}/api/save_data`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: user.id,
+                        data: dataToSave
+                    }),
+                    timeout: 10000
+                });
 
-                    console.log('💾 Data saved to cloud ✅');
-                    // Also save to localStorage as backup
-                    localStorage.setItem('speakingCoach_userData', JSON.stringify(dataToSave));
-                    return;
-                } catch (err) {
-                    retries--;
-                    if (retries > 0) {
-                        console.warn(`⚠️ Save failed, retrying... (${retries} left)`);
-                        await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
-                    } else {
-                        console.error('❌ Failed to save data after 3 attempts:', err);
-                        // Save to localStorage as fallback
-                        localStorage.setItem('speakingCoach_backup', JSON.stringify(dataToSave));
-                        localStorage.setItem('speakingCoach_lastError', `Failed to sync at ${new Date().toLocaleString()}`);
-                    }
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                console.log('💾 Data saved to cloud ✅');
+                // Also save to localStorage as backup
+                localStorage.setItem('speakingCoach_userData', JSON.stringify(dataToSave));
+                setSaveStatus('saved');
+
+                // Reset back to idle after 3 seconds
+                setTimeout(() => setSaveStatus('idle'), 3000);
+                return;
+            } catch (err) {
+                retries--;
+                if (retries > 0) {
+                    console.warn(`⚠️ Save failed, retrying... (${retries} left)`);
+                    await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
+                } else {
+                    console.error('❌ Failed to save data after 3 attempts:', err);
+                    setSaveStatus('error');
+                    // Save to localStorage as fallback
+                    localStorage.setItem('speakingCoach_backup', JSON.stringify(dataToSave));
+                    localStorage.setItem('speakingCoach_lastError', `Failed to sync at ${new Date().toLocaleString()}`);
                 }
             }
-        };
+        }
+    };
+
+    useEffect(() => {
+        if (!user) return; // Don't save if not logged in
 
         // Debounce save (wait 1s after last change, then save every 5s)
         const timeoutId = setTimeout(saveData, 1000);
@@ -1514,6 +1524,8 @@ function App() {
                         exportToJSON={() => exportToJSON()}
                         importFromJSON={importFromJSON}
                         achievements={achievements}
+                        saveStatus={saveStatus}
+                        onForceSave={saveData}
                     />
                 )}
 
@@ -2177,7 +2189,7 @@ function PowerWordsView({ currentDay, powerWordData, weekData }) {
 }
 
 // Progress View with Export/Import + History Modal
-function ProgressView({ sessions, currentDay, resetProgress, exportToJSON, importFromJSON, achievements }) {
+function ProgressView({ sessions, currentDay, resetProgress, exportToJSON, importFromJSON, achievements, saveStatus, onForceSave }) {
     const [selectedSession, setSelectedSession] = React.useState(null);  // For history modal
 
     const last7Days = sessions.slice(-7);
@@ -2233,15 +2245,48 @@ function ProgressView({ sessions, currentDay, resetProgress, exportToJSON, impor
             {/* Data Management */}
             <div className="glass-effect rounded-3xl p-8 shadow-2xl">
                 <h3 className="text-xl font-bold text-gray-800 mb-4">💾 จัดการข้อมูล</h3>
+
+                {/* Save Status Indicator */}
+                <div className={`p-4 rounded-xl mb-4 flex items-center justify-between ${saveStatus === 'saving' ? 'bg-blue-50 text-blue-700' :
+                    saveStatus === 'saved' ? 'bg-green-50 text-green-700' :
+                        saveStatus === 'error' ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-700'
+                    }`}>
+                    <div className="flex items-center gap-2">
+                        {saveStatus === 'saving' && <span className="animate-spin">🔄</span>}
+                        {saveStatus === 'saved' && <span>✅</span>}
+                        {saveStatus === 'error' && <span>❌</span>}
+                        <span className="font-semibold">
+                            {saveStatus === 'saving' ? 'กำลังบันทึกข้อมูล...' :
+                                saveStatus === 'saved' ? 'บันทึกข้อมูลแล้ว' :
+                                    saveStatus === 'error' ? 'บันทึกไม่สำเร็จ' : 'พร้อมบันทึก'}
+                        </span>
+                    </div>
+                    {saveStatus === 'error' && (
+                        <button
+                            onClick={onForceSave}
+                            className="px-3 py-1 bg-white rounded border border-red-200 text-sm hover:shadow"
+                        >
+                            ลองใหม่
+                        </button>
+                    )}
+                </div>
+
                 <div className="flex gap-4 flex-wrap">
+                    <button
+                        onClick={onForceSave}
+                        disabled={saveStatus === 'saving'}
+                        className="bg-purple-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-purple-700 transition disabled:opacity-50"
+                    >
+                        ☁️ บันทึกข้อมูลเข้า Cloud เดี๋ยวนี้
+                    </button>
                     <button
                         onClick={exportToJSON}
                         className="bg-blue-500 text-white px-6 py-3 rounded-xl font-semibold hover:bg-blue-600 transition"
                     >
-                        📥 Export ข้อมูล (JSON)
+                        📥 Export (JSON)
                     </button>
                     <label className="bg-green-500 text-white px-6 py-3 rounded-xl font-semibold hover:bg-green-600 transition cursor-pointer">
-                        📤 Import ข้อมูล
+                        📤 Import
                         <input
                             type="file"
                             accept=".json"
