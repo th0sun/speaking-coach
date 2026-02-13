@@ -115,6 +115,9 @@ const AuthView = ({ onLogin, onGuest }) => {
                     <p className="text-xs text-gray-400">
                         ระบบจะเก็บข้อมูลของคุณไว้อย่างปลอดภัยและสามารถเข้าใช้งานได้จากทุกเครื่อง
                     </p>
+                    <p className="text-[10px] text-gray-300 mt-2">
+                        *หากเข้าไม่ได้และเคยผ่านระบบกู้คืน ลองใช้ PIN: 000000
+                    </p>
                 </div>
             </div>
         </div>
@@ -477,14 +480,15 @@ function App() {
                 handleLogin(user, userData);
 
                 // 🔄 Force sync with backend to ensure data is fresh (especially API Keys)
-                fetch(`${CONFIG.BACKEND_URL}/api/get_data?user_id=${user.id}`)
+                fetch(`${CONFIG.BACKEND_URL}/api/get_data?user_id=${String(user.id)}`)
                     .then(res => {
                         if (res.status === 404 || res.status === 401) {
                             console.error('❌ User mismatch: Local user not found on server. Logging out silently...');
                             // Silent Logout: Clear data and state without alert/reload
                             localStorage.removeItem('speakingCoach_user');
                             localStorage.removeItem('speakingCoach_userData');
-                            setUser(null); // This will trigger UI to show Login screen
+                            setUser(null);
+                            setIsAuthChecking(false);
                             return null;
                         }
                         if (!res.ok) throw new Error(`Server error: ${res.status}`);
@@ -495,8 +499,12 @@ function App() {
                             console.log('☁️ Synced fresh data from cloud');
                             handleLogin(user, data.data);
                         }
+                        setIsAuthChecking(false);
                     })
-                    .catch(e => console.error('⚠️ Background sync failed:', e));
+                    .catch(e => {
+                        console.error('⚠️ Background sync failed:', e);
+                        setIsAuthChecking(false);
+                    });
             } catch (err) {
                 console.error('❌ Failed to restore session:', err);
                 setIsAuthChecking(false);
@@ -533,7 +541,6 @@ function App() {
             // 💾 Persistence: Save Chat & AI State
             transcript,
             aiFeedback,
-            chatMessages,
             chatMessages,
             isTodayCompleted: todayCompleted
         };

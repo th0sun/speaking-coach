@@ -270,7 +270,7 @@ def register():
             conn.close()
         
         logger.info(f"✅ User registered: {username}")
-        return jsonify({'message': 'Registration successful', 'user_id': user_id, 'username': username}), 201
+        return jsonify({'message': 'Registration successful', 'user_id': str(user_id), 'username': username}), 201
     except Exception as e:
         logger.error(f"❌ Registration error: {e}")
         if 'duplicate' in str(e).lower() or 'unique' in str(e).lower():
@@ -305,7 +305,7 @@ def login():
             return jsonify({
                 'message': 'Login successful',
                 'user': {
-                    'id': user[0],
+                    'id': str(user[0]),
                     'username': user[1]
                 },
                 'data': json.loads(user[2]) if user[2] else {}
