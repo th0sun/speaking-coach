@@ -325,13 +325,31 @@ def save_data():
     if not user_id or not user_data:
         return jsonify({'error': 'User ID and Data are required'}), 400
 
+    # 🛡️ Protection: Check for Integer Overflow (Postgres INT 4-byte limit)
+    # If user_id is too large (legacy/bad data), skip DB lookup to valid crash
+    MAX_INT = 2147483647
+    is_id_safe = True
+    try:
+        if int(user_id) > MAX_INT:
+            logger.warning(f"⚠️ User ID {user_id} exceeds {MAX_INT}. Skipping DB lookup to avoid crash.")
+            is_id_safe = False
+    except:
+         is_id_safe = False
+
     try:
         if USE_POSTGRES:
             conn = psycopg2.connect(DATABASE_URL, sslrootcert='/tmp/root.crt')
             c = conn.cursor()
-            # Try UPDATE first
-            c.execute("UPDATE users SET data = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", 
-                     (json.dumps(user_data), user_id))
+            
+            # Only try UPDATE if ID is safe
+            if is_id_safe:
+                c.execute("UPDATE users SET data = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", 
+                         (json.dumps(user_data), user_id))
+            else:
+                # Mock rowcount=0 to trigger auto-recovery logic below
+                class MockCursor:
+                    rowcount = 0
+                c = MockCursor() 
             
             if c.rowcount == 0:
                  # ⚠️ User not found (Ghost Session). Try Auto-Recovery if username provided.
