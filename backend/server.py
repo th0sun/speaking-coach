@@ -333,9 +333,12 @@ def save_data():
             c.execute("UPDATE users SET data = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", 
                      (json.dumps(user_data), user_id))
             if c.rowcount == 0:
+                 logger.warning(f"⚠️ Save failed: User ID {user_id} not found in DB (Rowcount: 0)")
                  conn.rollback()
                  conn.close()
-                 return jsonify({'error': 'User not found'}), 404
+                 return jsonify({'error': 'User not found or no changes made'}), 404
+            
+            logger.info(f"✅ Data updated for usage {user_id}. Rows affected: {c.rowcount}")
             conn.commit()
             conn.close()
         else:
@@ -343,12 +346,13 @@ def save_data():
             c = conn.cursor()
             c.execute("UPDATE users SET data = ? WHERE id = ?", (json.dumps(user_data), user_id))
             if c.rowcount == 0:
+                 logger.warning(f"⚠️ Save failed: User ID {user_id} not found in DB (Rowcount: 0)")
                  conn.close()
-                 return jsonify({'error': 'User not found'}), 404
+                 return jsonify({'error': 'User not found or no changes made'}), 404
             conn.commit()
             conn.close()
         
-        logger.info(f"💾 Data saved for user {user_id}")
+        logger.info(f"💾 Data saved successfully for user {user_id}")
         return jsonify({'message': 'Data saved successfully'}), 200
     except Exception as e:
         logger.error(f"❌ Save error: {e}")
