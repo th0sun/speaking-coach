@@ -1320,9 +1320,23 @@ function App() {
             if (userData.achievements) setAchievements(userData.achievements);
 
             // Handle API Keys from backend settings
-            if (userData.settings && userData.settings.apiKeys) {
+            if (userData.settings && userData.settings.apiKeys && userData.settings.apiKeys.length > 0) {
                 setApiKeys(userData.settings.apiKeys);
-                if (userData.settings.apiKeys.length > 0) setActiveKeyId(userData.settings.apiKeys[0].id);
+                setActiveKeyId(userData.settings.apiKeys[0].id);
+            } else {
+                // Fallback: Check local storage for keys (so you don't have to re-enter if you used this device before)
+                const savedKeys = localStorage.getItem('speakingCoach_apiKeys');
+                if (savedKeys) {
+                    try {
+                        const parsedKeys = JSON.parse(savedKeys);
+                        if (parsedKeys.length > 0) {
+                            setApiKeys(parsedKeys);
+                            setActiveKeyId(parsedKeys[0].id);
+                        }
+                    } catch (e) {
+                        console.error('Error loading saved keys:', e);
+                    }
+                }
             }
         }
         setIsAuthChecking(false);
@@ -1343,7 +1357,8 @@ function App() {
         localStorage.removeItem('speakingCoach_currentDay');
         localStorage.removeItem('speakingCoach_sessions');
         localStorage.removeItem('speakingCoach_achievements');
-        localStorage.removeItem('speakingCoach_apiKeys');
+        // Keep API keys on device for convenience
+        // localStorage.removeItem('speakingCoach_apiKeys');
 
         console.log('👋 Logged out successfully');
     };
