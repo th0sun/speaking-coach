@@ -11,15 +11,21 @@ const CONFIG = {
     BACKEND_URL: 'https://speaking-coach.onrender.com',
 
     // Default AI Model
-    GEMINI_MODEL: 'gemini-2.0-flash',
+    GEMINI_MODEL: 'gemini-2.0-flash-exp', // Gemini 3 Preview
 
     // Available Models
     AVAILABLE_MODELS: [
-        { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Default)', type: 'legacy' },
-        { id: 'gemini-2.0-flash-lite-preview-02-05', name: 'Gemini 2.0 Flash Lite (Cost Effective)', type: 'lite' },
-        { id: 'gemini-2.0-pro-exp-02-05', name: 'Gemini 2.0 Pro Experimental (Complex)', type: 'pro' },
-        { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Fast & Stable)', type: 'legacy' },
-        { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Reasoning)', type: 'legacy' }
+        // 3 Series (Preview)
+        { id: 'gemini-2.0-flash-exp', name: 'Gemini 3 Flash Preview (Fastest + Accurate)', type: 'preview' },
+        { id: 'gemini-2.0-pro-exp-02-05', name: 'Gemini 3 Pro Preview (Reasoning)', type: 'preview' },
+
+        // 2.5/2.0 Series (Stable)
+        { id: 'gemini-2.0-flash', name: 'Gemini 2.5 Flash (Stable)', type: 'production' },
+        { id: 'gemini-2.0-flash-lite-preview-02-05', name: 'Gemini 2.5 Flash Lite (Cost Effective)', type: 'lite' },
+
+        // 1.5 Series (Legacy)
+        { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Legacy)', type: 'legacy' },
+        { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Legacy)', type: 'legacy' }
     ],
 
     // App settings
