@@ -556,6 +556,15 @@ function App() {
                     throw new Error(`Server error: ${response.status}`);
                 }
 
+                const responseData = await response.json();
+
+                if (responseData.new_user_id) {
+                    console.log(`♻️ Auto-Recovery: Updating User ID from ${user.id} to ${responseData.new_user_id}`);
+                    const updatedUser = { ...user, id: responseData.new_user_id };
+                    setUser(updatedUser);
+                    localStorage.setItem('speakingCoach_user', JSON.stringify(updatedUser));
+                }
+
                 console.log('💾 Data saved to cloud ✅');
                 // Also save to localStorage as backup
                 localStorage.setItem('speakingCoach_userData', JSON.stringify(dataToSave));
