@@ -3,12 +3,14 @@
  * Contains: Config, Helpers, AudioAnalyzer, AICoach
  */
 
+const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
 // ==========================================
 // 1. CONFIGURATION
 // ==========================================
 const CONFIG = {
-    // Backend API URL
-    BACKEND_URL: 'https://speaking-coach.onrender.com',
+    // Backend API URL (Auto-switch between Local and Production)
+    BACKEND_URL: isLocal ? 'http://localhost:5001' : 'https://speaking-coach.onrender.com',
 
     // Default AI Model
     GEMINI_MODEL: 'gemini-3-flash-preview', // Gemini 3 Flash Preview (Fastest)
@@ -31,7 +33,7 @@ const CONFIG = {
     ],
 
     // App settings
-    APP_VERSION: '3.3',
+    APP_VERSION: '3.4',
     APP_NAME: 'Speaking Coach Pro',
 
     // Debug mode

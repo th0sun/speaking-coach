@@ -480,10 +480,11 @@ function App() {
                 fetch(`${CONFIG.BACKEND_URL}/api/get_data?user_id=${user.id}`)
                     .then(res => {
                         if (res.status === 404 || res.status === 401) {
-                            console.error('❌ User mismatch: Local user not found on server. Logging out...');
-                            localStorage.clear();
-                            alert('Session expired or invalid. Please login again.');
-                            window.location.reload();
+                            console.error('❌ User mismatch: Local user not found on server. Logging out silently...');
+                            // Silent Logout: Clear data and state without alert/reload
+                            localStorage.removeItem('speakingCoach_user');
+                            localStorage.removeItem('speakingCoach_userData');
+                            setUser(null); // This will trigger UI to show Login screen
                             return null;
                         }
                         if (!res.ok) throw new Error(`Server error: ${res.status}`);
