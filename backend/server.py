@@ -255,34 +255,42 @@ def register():
         if USE_POSTGRES:
             conn = psycopg2.connect(DATABASE_URL, sslrootcert='/tmp/root.crt')
             c = conn.cursor()
-            # 🛡️ UPSERT: If user exists, update PIN. This allows "Emergency Account Recovery" 
-            # by just re-registering with the same username.
-            c.execute('''
-                INSERT INTO users (username, pin, data) 
-                VALUES (%s, %s, %s) 
-                ON CONFLICT (username) 
-                DO UPDATE SET pin = EXCLUDED.pin 
-                RETURNING id
-            ''', (username, pin, initial_data))
-            user_id = c.fetchone()[0]
+            
+            # 🛡️ Robust Check-then-Update (Ultra-Safe Account Recovery)
+            c.execute("SELECT id FROM users WHERE username = %s", (username,))
+            existing = c.fetchone()
+            
+            if existing:
+                user_id = existing[0]
+                logger.info(f"🔄 Account Recovery: Updating PIN for existing user {username} (ID: {user_id})")
+                c.execute("UPDATE users SET pin = %s WHERE id = %s", (pin, user_id))
+            else:
+                logger.info(f"🆕 Creating NEW user: {username}")
+                c.execute("INSERT INTO users (username, pin, data) VALUES (%s, %s, %s) RETURNING id", 
+                         (username, pin, initial_data))
+                user_id = c.fetchone()[0]
+                
             conn.commit()
             conn.close()
         else:
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
-            # SQLite version of Upsert
-            c.execute('''
-                INSERT INTO users (username, pin, data) 
-                VALUES (?, ?, ?)
-                ON CONFLICT(username) DO UPDATE SET pin = excluded.pin
-            ''', (username, pin, initial_data))
-            conn.commit()
-            # For SQLite, it's slightly different to get the ID on conflict
+            
             c.execute("SELECT id FROM users WHERE username = ?", (username,))
-            user_id = c.fetchone()[0]
+            existing = c.fetchone()
+            
+            if existing:
+                user_id = existing[0]
+                c.execute("UPDATE users SET pin = ? WHERE id = ?", (pin, user_id))
+            else:
+                c.execute("INSERT INTO users (username, pin, data) VALUES (?, ?, ?)", 
+                         (username, pin, initial_data))
+                user_id = c.lastrowid
+                
+            conn.commit()
             conn.close()
         
-        logger.info(f"✅ User registered/recovered: {username}")
+        logger.info(f"✅ User registration/recovery COMPLETE: {username}")
         return jsonify({'message': 'Registration successful', 'user_id': str(user_id), 'username': username}), 201
     except Exception as e:
         logger.error(f"❌ Registration error: {e}")
