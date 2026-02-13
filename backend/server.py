@@ -320,6 +320,8 @@ def login():
 @app.route('/api/save_data', methods=['POST'])
 def save_data():
     data = request.json
+    user_id = data.get('user_id')
+    user_data = data.get('data')
     username = data.get('username') # Optional, for auto-recovery
 
     if not user_id or not user_data:
