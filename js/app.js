@@ -714,33 +714,38 @@ function App() {
     }
 
     function rotateToNextKey() {
-        const currentIndex = apiKeys.findIndex(k => k.id === activeKeyId);
+        if (apiKeys.length <= 1) return null;
 
-        // Try to find next available key (not recently hit 429)
+        const currentIndex = apiKeys.findIndex(k => k.id === activeKeyId);
         const now = new Date();
-        for (let i = 1; i <= apiKeys.length; i++) {
+
+        // 1. Try to find the next HEALTHY key (not 429)
+        for (let i = 1; i < apiKeys.length; i++) {
             const nextIndex = (currentIndex + i) % apiKeys.length;
             const nextKey = apiKeys[nextIndex];
 
-            // Check if key is usable (no recent 429 or 429 was more than 1 hour ago)
             if (!nextKey.last429) {
                 setActiveKey(nextKey.id);
-                console.log(`🔄 Rotated to Key: ${nextKey.name} `);
                 return nextKey;
             }
 
+            // Check cooldown (1 hour)
             const last429Time = new Date(nextKey.last429);
-            const hoursSince429 = (now - last429Time) / (1000 * 60 * 60);
+            const hoursSince = (now - last429Time) / (1000 * 60 * 60);
+            if (hoursSince >= 1) {
+                // Reset 429 status if enough time passed
+                const updatedKeys = [...apiKeys];
+                updatedKeys[nextIndex].last429 = null;
+                setApiKeys(updatedKeys);
+                localStorage.setItem('api_keys', JSON.stringify(updatedKeys));
 
-            if (hoursSince429 > 1) {
                 setActiveKey(nextKey.id);
-                console.log(`🔄 Rotated to Key: ${nextKey.name} (cooldown passed)`);
                 return nextKey;
             }
         }
 
-        // If all keys are exhausted, return null
-        console.warn('⚠️ All API keys exhausted');
+        // 2. If all are bad, return null to stop the loop
+        console.warn('⚠️ All keys are currently in cooldown');
         return null;
     }
 
@@ -1057,10 +1062,11 @@ function App() {
         let feedback = null;
         let attempts = 0;
         let currentKey = activeKey;
+        const maxAttempts = apiKeys.length * 2; // Allow some retries
 
-        while (attempts < apiKeys.length && !feedback) {
+        while (attempts < maxAttempts && !feedback) {
             try {
-                console.log(`Attempt ${attempts + 1}: Using ${currentKey.name} `);
+                console.log(`🚀 Attempt ${attempts + 1}/${maxAttempts}: Using ${currentKey.name} (${selectedModel})`);
 
                 // Get Audio Stats
                 const audioStats = audioAnalyzer.current ? audioAnalyzer.current.getStats() : null;
@@ -1078,37 +1084,56 @@ function App() {
                     selectedModel // Pass selected model here
                 );
 
-                // Success!
-                updateKeyStats(currentKey.id, 'success');
-                console.log('✅ AI analysis complete:', feedback);
+                if (feedback) {
+                    // Success!
+                    updateKeyStats(currentKey.id, 'success');
+                    console.log('✅ AI analysis complete');
+                    setAiFeedback(feedback);
+                    setIsAnalyzing(false);
+                    return; // Exit function immediately on success
+                }
 
             } catch (error) {
-                console.error(`❌ Error with ${currentKey.name}: `, error);
+                console.error(`❌ Error with ${currentKey.name}:`, error);
 
                 // Check if it's a 429 error
-                if (error.status === 429 || error.message?.includes('429')) {
+                if (error.status === 429 || (error.message && error.message.includes('429'))) {
+                    console.warn(`⚠️ ${currentKey.name} 429 Quota Exceeded`);
                     updateKeyStats(currentKey.id, 'error', { status: 429 });
-                    alert(`⚠️ ${currentKey.name} หมด Quota แล้ว กำลังลองใช้ Key อื่น...`);
 
-                    // Rotate to next key
-                    const nextKey = rotateToNextKey();
-                    if (!nextKey) {
-                        alert('🚫 API Keys ทุกตัวหมด Quota แล้ว กรุณารอหรือเพิ่ม Key ใหม่');
-                        break;
-                    }
-                    currentKey = nextKey;
-                    attempts++;
+                    // Show small toast/notification instead of blocking alert
+                    // (For now using console to avoid UI freeze, user sees 'Analyzing...' status)
                 } else {
-                    // Other errors (network, etc.)
                     updateKeyStats(currentKey.id, 'error', error);
-                    alert(`เกิดข้อผิดพลาด: ${error.message} `);
+                }
+
+                // Wait before next attempt (Exponential Backoff: 1s, 2s, 4s...)
+                const delay = Math.min(1000 * Math.pow(2, attempts), 8000);
+                console.log(`⏳ Waiting ${delay}ms before next key...`);
+                await new Promise(r => setTimeout(r, delay));
+
+                // Rotate Key
+                const nextKey = rotateToNextKey();
+                if (!nextKey) {
+                    alert('🚫 ทุก API Key หมดโควต้าแล้ว กรุณารอ 1 ชั่วโมงหรือเพิ่ม Key ใหม่');
                     break;
                 }
+
+                // If we rotated to the SAME key, it means we only have one usable key
+                if (nextKey.id === currentKey.id) {
+                    console.warn('⚠️ Loop detected: No other keys available');
+                    break;
+                }
+
+                currentKey = nextKey;
+                attempts++;
             }
         }
 
-        setAiFeedback(feedback);
         setIsAnalyzing(false);
+        if (!feedback) {
+            alert('❌ ไม่สามารถวิเคราะห์ได้ในขณะนี้ (API Quota เต็มหรือระบบขัดข้อง)');
+        }
     }
 
     async function sendChatMessage(userMessage) {
