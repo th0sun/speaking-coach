@@ -1320,22 +1320,13 @@ function App() {
             if (userData.achievements) setAchievements(userData.achievements);
 
             // Handle API Keys from backend settings
-            if (userData.settings && userData.settings.apiKeys && userData.settings.apiKeys.length > 0) {
+            if (userData.settings && userData.settings.apiKeys) {
                 setApiKeys(userData.settings.apiKeys);
-                setActiveKeyId(userData.settings.apiKeys[0].id);
-            } else {
-                // Fallback: Check local storage for keys (so you don't have to re-enter if you used this device before)
-                const savedKeys = localStorage.getItem('speakingCoach_apiKeys');
-                if (savedKeys) {
-                    try {
-                        const parsedKeys = JSON.parse(savedKeys);
-                        if (parsedKeys.length > 0) {
-                            setApiKeys(parsedKeys);
-                            setActiveKeyId(parsedKeys[0].id);
-                        }
-                    } catch (e) {
-                        console.error('Error loading saved keys:', e);
-                    }
+                // Restore the active key and its state (cooldowns, etc.)
+                if (userData.settings.apiKeys.length > 0) {
+                    // Find the previously active key or default to first
+                    const activeParams = userData.settings.apiKeys.find(k => k.isActive);
+                    setActiveKeyId(activeParams ? activeParams.id : userData.settings.apiKeys[0].id);
                 }
             }
         }
@@ -1357,8 +1348,7 @@ function App() {
         localStorage.removeItem('speakingCoach_currentDay');
         localStorage.removeItem('speakingCoach_sessions');
         localStorage.removeItem('speakingCoach_achievements');
-        // Keep API keys on device for convenience
-        // localStorage.removeItem('speakingCoach_apiKeys');
+        localStorage.removeItem('speakingCoach_apiKeys');
 
         console.log('👋 Logged out successfully');
     };
