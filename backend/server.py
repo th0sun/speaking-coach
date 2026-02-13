@@ -327,13 +327,16 @@ def save_data():
     if not user_id or not user_data:
         return jsonify({'error': 'User ID and Data are required'}), 400
 
-    # 🛡️ Protection: Check for Integer Overflow (Postgres INT 4-byte limit)
-    # If user_id is too large (legacy/bad data), skip DB lookup to valid crash
-    MAX_INT = 2147483647
+    # 🛡️ Protection: Check for Integer Overflow
+    # CockroachDB/Postgres BIGINT is 64-bit (up to 9,223,372,036,854,775,807)
+    # JS Number is safe only up to 9,007,199,254,740,991 (53-bit)
+    # So we must treat IDs as STRINGS in JS, but they are safe in Python/DB.
+    MAX_BIGINT = 9223372036854775807
     is_id_safe = True
     try:
-        if int(user_id) > MAX_INT:
-            logger.warning(f"⚠️ User ID {user_id} exceeds {MAX_INT}. Skipping DB lookup to avoid crash.")
+        # If ID is numeric string, check range. If it's garbage string, it fails int()
+        if int(user_id) > MAX_BIGINT:
+            logger.warning(f"⚠️ User ID {user_id} exceeds 64-bit INT. Skipping DB lookup.")
             is_id_safe = False
     except:
          is_id_safe = False
@@ -382,33 +385,28 @@ def save_data():
                          
                          if existing_user:
                              real_id = existing_user[0]
+                             # 🆔 ID from DB might be BIGINT (Mockroach/Postgres)
+                             # We TRUST it. Just ensure we send it as STRING to JS to avoid precision loss.
                              
-                             # 🚨 Check if the FOUND ID is also unsafe (Legacy Giant ID)
-                             if real_id > MAX_INT:
-                                 logger.warning(f"⚠️ Found user {username} but ID {real_id} is unsafe (Legacy). Deleting to recreate...")
-                                 c.execute("DELETE FROM users WHERE id = %s", (real_id,))
-                                 # Fall through to 'else' to create new user
-                                 existing_user = None 
-                             
-                         if existing_user:
-                             real_id = existing_user[0]
                              logger.info(f"✅ Found map for {username} -> ID {real_id}. Updating...")
                              c.execute("UPDATE users SET data = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", 
                                       (json.dumps(user_data), real_id))
                              conn.commit()
                              conn.close()
-                             return jsonify({'message': 'Recovered', 'new_user_id': real_id}), 200
+                             # 🔑 KEY FIX: Send ID as STRING
+                             return jsonify({'message': 'Recovered', 'new_user_id': str(real_id)}), 200
                          else:
                              # Create NEW user
                              logger.info(f"🆕 Creating user {username} with NEW ID...")
                              c.execute('''
-                                INSERT INTO users (username, pin, data) 
-                                VALUES (%s, '000000', %s) RETURNING id
+                                 INSERT INTO users (username, pin, data) 
+                                 VALUES (%s, '000000', %s) RETURNING id
                              ''', (username, json.dumps(user_data)))
                              new_id = c.fetchone()[0]
                              conn.commit()
                              conn.close()
-                             return jsonify({'message': 'Recreated', 'new_user_id': new_id}), 200
+                             # 🔑 KEY FIX: Send ID as STRING
+                             return jsonify({'message': 'Created', 'new_user_id': str(new_id)}), 200
                      except Exception as e:
                          logger.error(f"❌ Critical Recovery Failure: {e}")
                          conn.rollback()

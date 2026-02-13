@@ -534,7 +534,8 @@ function App() {
             transcript,
             aiFeedback,
             chatMessages,
-            isTodayCompleted
+            chatMessages,
+            isTodayCompleted: todayCompleted
         };
 
         // 🛑 Spam Prevention: Check if data actually changed
