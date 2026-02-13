@@ -11,19 +11,21 @@ const CONFIG = {
     BACKEND_URL: 'https://speaking-coach.onrender.com',
 
     // Default AI Model
-    GEMINI_MODEL: 'gemini-2.0-flash-exp', // Gemini 3 Preview
+    GEMINI_MODEL: 'gemini-3-flash-preview', // Gemini 3 Flash Preview (Fastest)
 
     // Available Models
     AVAILABLE_MODELS: [
-        // 3 Series (Preview)
-        { id: 'gemini-2.0-flash-exp', name: 'Gemini 3 Flash Preview (Fastest + Accurate)', type: 'preview' },
-        { id: 'gemini-2.0-pro-exp-02-05', name: 'Gemini 3 Pro Preview (Reasoning)', type: 'preview' },
+        // Gemini 3 Series (Preview - Latest)
+        { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash Preview (Fastest + Accurate)', type: 'preview' },
+        { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro Preview (Best Reasoning)', type: 'preview' },
 
-        // 2.5/2.0 Series (Stable)
-        { id: 'gemini-2.0-flash', name: 'Gemini 2.5 Flash (Stable)', type: 'production' },
-        { id: 'gemini-2.0-flash-lite-preview-02-05', name: 'Gemini 2.5 Flash Lite (Cost Effective)', type: 'lite' },
+        // Gemini 2.5 Series (Stable - Production)
+        { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Stable)', type: 'production' },
+        { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Enterprise)', type: 'production' },
+        { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite (Cost Efficient)', type: 'lite' },
+        { id: 'gemini-2.5-flash-live', name: 'Gemini 2.5 Flash Live (Voice/Video)', type: 'production' },
 
-        // 1.5 Series (Legacy)
+        // Gemini 1.5 Series (Legacy)
         { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Legacy)', type: 'legacy' },
         { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Legacy)', type: 'legacy' }
     ],
@@ -338,7 +340,7 @@ class AICoach {
         if (audioStats) {
             audioStatsText = `\n**📊 สถิติเสียง (Audio Signal Metrics):**
 - Volume (ความดัง): Avg ${audioStats.volume.avg}dB (Max ${audioStats.volume.max}dB)
-  *คำแนะนำ: ปกติเสียงพูดควรอยู่ระหว่าง -20dB ถึง -10dB. ถ้าต่ำกว่า -30dB คือเบาเกินไป*
+   *คำแนะนำ: ปกติเสียงพูดควรอยู่ระหว่าง -20dB ถึง -10dB. ถ้าต่ำกว่า -30dB คือเบาเกินไป*
 - Pitch (ความถี่เสียง): Avg ${audioStats.pitch.avg}Hz (Range ${audioStats.pitch.min}-${audioStats.pitch.max}Hz)
 - Confidence (ความมั่นใจในการถอดความ): ${audioStats.confidence}%
 `;
