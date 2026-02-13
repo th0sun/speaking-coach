@@ -583,7 +583,16 @@ function App() {
                     setSaveStatus('error');
                     // Save to localStorage as fallback
                     localStorage.setItem('speakingCoach_backup', JSON.stringify(dataToSave));
-                    localStorage.setItem('speakingCoach_lastError', `Failed to sync at ${new Date().toLocaleString()}`);
+
+                    // 🚨 Emergency Reset: If we get repeated 500s (likely ID corruption), prompt user
+                    if (err.message.includes('500') && retries <= 0) {
+                        const doReset = confirm('เกิดข้อผิดพลาดร้ายแรงจากข้อมูลเก่า (Server Error 500)\n\nระบบต้องการ "รีเซ็ตข้อมูลการเชื่อมต่อ"\n(ข้อมูลการฝึกจะไม่หาย แต่ต้อง Login ใหม่)\n\nตกลงเพื่อแก้ไขทันที?');
+                        if (doReset) {
+                            localStorage.removeItem('speakingCoach_user'); // Clear corrupted user
+                            localStorage.removeItem('speakingCoach_userData');
+                            window.location.reload();
+                        }
+                    }
                 }
             }
         }

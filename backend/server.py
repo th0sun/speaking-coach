@@ -353,35 +353,45 @@ def save_data():
             
             if c.rowcount == 0:
                  # ⚠️ User not found (Ghost Session). Try Auto-Recovery if username provided.
+                 # ⚠️ User not found OR ID unsafe. Try Auto-Recovery.
                  if username:
-                     logger.warning(f"👻 Ghost Session detected for ID {user_id} ({username}). Attempting auto-restore...")
+                     logger.warning(f"👻 Ghost Session/Bad ID detected for {username} (ID: {user_id}). Recovery mode...")
+                     
+                     # Check if we can/should try to reuse the ID
+                     can_reuse_id = is_id_safe
+                     
+                     if can_reuse_id:
+                         try:
+                             # Attempt 1: Try to restore with original ID
+                             c.execute('''
+                                INSERT INTO users (id, username, pin, data) 
+                                VALUES (%s, %s, '000000', %s)
+                             ''', (user_id, username, json.dumps(user_data)))
+                             logger.info(f"✅ Auto-recovered user {username} (ID: {user_id})")
+                             conn.commit()
+                             conn.close()
+                             return jsonify({'message': 'Data saved (restored)'}), 200
+                         except Exception as insert_err:
+                             logger.warning(f"⚠️ Restore with original ID failed: {insert_err}")
+                             conn.rollback()
+                     
+                     # Attempt 2: Check logic (Find by username OR Create New)
                      try:
-                         # Attempt 1: Try to restore with original ID (if it fits)
-                         c.execute('''
-                            INSERT INTO users (id, username, pin, data) 
-                            VALUES (%s, %s, '000000', %s)
-                         ''', (user_id, username, json.dumps(user_data)))
-                         logger.info(f"✅ Auto-recovered user {username} (ID: {user_id})")
-                     except Exception as insert_err:
-                         logger.warning(f"⚠️ Restore with original ID failed ({insert_err}). Trying verification via username...")
-                         conn.rollback()
-                         
-                         # Attempt 2: Check if username exists (maybe ID changed?)
+                         # Check if username exists
                          c.execute("SELECT id FROM users WHERE username = %s", (username,))
                          existing_user = c.fetchone()
                          
                          if existing_user:
-                             # User exists, just update their data
                              real_id = existing_user[0]
-                             logger.info(f"✅ Found existing user {username} with ID {real_id}. Updating...")
+                             logger.info(f"✅ Found map for {username} -> ID {real_id}. Updating...")
                              c.execute("UPDATE users SET data = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", 
                                       (json.dumps(user_data), real_id))
                              conn.commit()
                              conn.close()
                              return jsonify({'message': 'Recovered', 'new_user_id': real_id}), 200
                          else:
-                             # Attempt 3: Create NEW user (Let DB generate ID)
-                             logger.info(f"🆕 Creating new user record for {username}...")
+                             # Create NEW user
+                             logger.info(f"🆕 Creating user {username} with NEW ID...")
                              c.execute('''
                                 INSERT INTO users (username, pin, data) 
                                 VALUES (%s, '000000', %s) RETURNING id
@@ -390,6 +400,11 @@ def save_data():
                              conn.commit()
                              conn.close()
                              return jsonify({'message': 'Recreated', 'new_user_id': new_id}), 200
+                     except Exception as e:
+                         logger.error(f"❌ Critical Recovery Failure: {e}")
+                         conn.rollback()
+                         conn.close()
+                         return jsonify({'error': 'Recovery failed'}), 500
             
             conn.commit()
             conn.close()
