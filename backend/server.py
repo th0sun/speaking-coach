@@ -332,12 +332,19 @@ def save_data():
             c = conn.cursor()
             c.execute("UPDATE users SET data = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", 
                      (json.dumps(user_data), user_id))
+            if c.rowcount == 0:
+                 conn.rollback()
+                 conn.close()
+                 return jsonify({'error': 'User not found'}), 404
             conn.commit()
             conn.close()
         else:
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
             c.execute("UPDATE users SET data = ? WHERE id = ?", (json.dumps(user_data), user_id))
+            if c.rowcount == 0:
+                 conn.close()
+                 return jsonify({'error': 'User not found'}), 404
             conn.commit()
             conn.close()
         

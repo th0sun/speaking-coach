@@ -478,9 +478,19 @@ function App() {
 
                 // 🔄 Force sync with backend to ensure data is fresh (especially API Keys)
                 fetch(`${CONFIG.BACKEND_URL}/api/get_data?user_id=${user.id}`)
-                    .then(res => res.json())
+                    .then(res => {
+                        if (res.status === 404 || res.status === 401) {
+                            console.error('❌ User mismatch: Local user not found on server. Logging out...');
+                            localStorage.clear();
+                            alert('Session expired or invalid. Please login again.');
+                            window.location.reload();
+                            return null;
+                        }
+                        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+                        return res.json();
+                    })
                     .then(data => {
-                        if (data.data) {
+                        if (data && data.data) {
                             console.log('☁️ Synced fresh data from cloud');
                             handleLogin(user, data.data);
                         }
@@ -518,7 +528,7 @@ function App() {
             currentDay,
             sessions,
             achievements,
-            settings: { apiKeys }
+            settings: { apiKeys, selectedModel }
         };
 
         let retries = 3;
@@ -535,6 +545,13 @@ function App() {
                 });
 
                 if (!response.ok) {
+                    if (response.status === 404 || response.status === 401) {
+                        console.error('❌ User mismatch during save: Logging out...');
+                        localStorage.clear();
+                        alert('Session expired. Please login again to save data.');
+                        window.location.reload();
+                        return;
+                    }
                     throw new Error(`Server error: ${response.status}`);
                 }
 
