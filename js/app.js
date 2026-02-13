@@ -455,6 +455,7 @@ function App() {
     const [chatMessages, setChatMessages] = useState([]);
     const [chatInput, setChatInput] = useState('');
     const [isChatLoading, setIsChatLoading] = useState(false);
+    const [selectedModel, setSelectedModel] = useState(CONFIG.GEMINI_MODEL);
 
 
     const aiCoach = useRef(null);
@@ -1073,7 +1074,8 @@ function App() {
                     weekData,
                     topicData,
                     sessions,
-                    audioStats
+                    audioStats,
+                    selectedModel // Pass selected model here
                 );
 
                 // Success!
@@ -1341,20 +1343,42 @@ function App() {
             if (userData.achievements) setAchievements(userData.achievements);
 
             // Handle API Keys from backend settings
-            if (userData.settings && userData.settings.apiKeys) {
-                setApiKeys(userData.settings.apiKeys);
-                // Restore the active key and its state (cooldowns, etc.)
-                if (userData.settings.apiKeys.length > 0) {
-                    // Find the previously active key or default to first
-                    const activeParams = userData.settings.apiKeys.find(k => k.isActive);
-                    setActiveKeyId(activeParams ? activeParams.id : userData.settings.apiKeys[0].id);
+            if (userData.settings) {
+                if (userData.settings.apiKeys) {
+                    setApiKeys(userData.settings.apiKeys);
+                    // Restore the active key and its state (cooldowns, etc.)
+                    if (userData.settings.apiKeys.length > 0) {
+                        // Find the previously active key or default to first
+                        const activeParams = userData.settings.apiKeys.find(k => k.isActive);
+                        setActiveKeyId(activeParams ? activeParams.id : userData.settings.apiKeys[0].id);
+                    }
+                }
+
+                // Restore Selected Model
+                if (userData.settings.selectedModel) {
+                    setSelectedModel(userData.settings.selectedModel);
                 }
             }
         }
         setIsAuthChecking(false);
     };
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
+        // 🔒 Force Save before Logout
+        if (user && (saveStatus === 'idle' || saveStatus === 'error')) {
+            const confirmLogout = confirm('กำลังบันทึกข้อมูลล่าสุด... ต้องการรอสักครู่ไหม? (แนะนำให้รอ)');
+            if (confirmLogout) {
+                await saveData();
+            }
+        }
+
+        // Double check save status
+        if (saveStatus === 'saving') {
+            // Wait loop (max 3s)
+            console.log('⏳ Waiting for save to complete...');
+            await new Promise(r => setTimeout(r, 1500));
+        }
+
         // Clear user data from memory
         setUser(null);
         setSessions([]);
@@ -1536,6 +1560,8 @@ function App() {
                         addApiKey={addApiKey}
                         deleteApiKey={deleteApiKey}
                         setActiveKey={setActiveKey}
+                        selectedModel={selectedModel}
+                        setSelectedModel={setSelectedModel}
                     />
                 )}
             </div>
@@ -2455,7 +2481,7 @@ function ProgressView({ sessions, currentDay, resetProgress, exportToJSON, impor
 }
 
 // Settings View
-function SettingsView({ apiKeys, activeKeyId, addApiKey, deleteApiKey, setActiveKey }) {
+function SettingsView({ apiKeys, activeKeyId, addApiKey, deleteApiKey, setActiveKey, selectedModel, setSelectedModel }) {
     const [newKey, setNewKey] = useState('');
     const [newKeyName, setNewKeyName] = useState('');
 
@@ -2505,6 +2531,40 @@ function SettingsView({ apiKeys, activeKeyId, addApiKey, deleteApiKey, setActive
 
     return (
         <div className="space-y-6">
+
+            {/* 🤖 Model Selector (NEW) */}
+            <div className="glass-effect rounded-3xl p-8 shadow-2xl">
+                <h2 className="text-2xl font-bold text-gray-800 mb-6">🤖 เลือกโมเดล AI (Model Selection)</h2>
+                <p className="text-gray-600 mb-4">เลือกโมเดลที่เหมาะกับการใช้งานของคุณ (Stable สำหรับงานจริง, Preview สำหรับลองของใหม่)</p>
+
+                <div className="grid gap-3">
+                    {CONFIG.AVAILABLE_MODELS.map(model => (
+                        <label
+                            key={model.id}
+                            className={`flex items-center p-4 border-2 rounded-xl cursor-pointer transition ${selectedModel === model.id
+                                ? 'border-purple-600 bg-purple-50'
+                                : 'border-gray-200 hover:border-purple-300'
+                                }`}
+                        >
+                            <input
+                                type="radio"
+                                name="ai_model"
+                                value={model.id}
+                                checked={selectedModel === model.id}
+                                onChange={() => setSelectedModel(model.id)}
+                                className="w-5 h-5 text-purple-600 focus:ring-purple-500"
+                            />
+                            <div className="ml-3">
+                                <span className="block font-semibold text-gray-800">{model.name}</span>
+                                <span className="text-xs text-gray-500 uppercase tracking-wider bg-gray-200 px-2 py-1 rounded inline-block mt-1">
+                                    {model.type}
+                                </span>
+                            </div>
+                        </label>
+                    ))}
+                </div>
+            </div>
+
             {/* API Key List */}
             <div className="glass-effect rounded-3xl p-8 shadow-2xl">
                 <h2 className="text-2xl font-bold text-gray-800 mb-6">🔑 API Key Manager</h2>

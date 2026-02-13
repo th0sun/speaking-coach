@@ -10,8 +10,17 @@ const CONFIG = {
     // Backend API URL
     BACKEND_URL: 'https://speaking-coach.onrender.com',
 
-    // AI Model
+    // Default AI Model
     GEMINI_MODEL: 'gemini-2.0-flash',
+
+    // Available Models
+    AVAILABLE_MODELS: [
+        { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Default)', type: 'legacy' },
+        { id: 'gemini-2.0-flash-lite-preview-02-05', name: 'Gemini 2.0 Flash Lite (Cost Effective)', type: 'lite' },
+        { id: 'gemini-2.0-pro-exp-02-05', name: 'Gemini 2.0 Pro Experimental (Complex)', type: 'pro' },
+        { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Fast & Stable)', type: 'legacy' },
+        { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Reasoning)', type: 'legacy' }
+    ],
 
     // App settings
     APP_VERSION: '3.0',
@@ -206,7 +215,7 @@ class AICoach {
         this.backendURL = CONFIG.BACKEND_URL;
     }
 
-    async analyzeSpeech(apiKey, audioBlob, transcript, duration, weekData, topicData, sessions = [], audioStats = null) {
+    async analyzeSpeech(apiKey, audioBlob, transcript, duration, weekData, topicData, sessions = [], audioStats = null, model = CONFIG.GEMINI_MODEL) {
         // Handle transcript properly with TIMING information
         let transcriptText = '';
         let timingInfo = '';
@@ -460,8 +469,8 @@ ${sessions && sessions.length > 0 ? `
                 });
             } else {
                 // Fallback: Call Gemini API directly for text-only analysis
-                console.log('🤖 No audio - calling Gemini API directly...');
-                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${CONFIG.GEMINI_MODEL}:generateContent?key=${apiKey}`;
+                console.log(`🤖 No audio - calling Gemini API directly (${model})...`);
+                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
                 // Prepare Request Parts
                 const parts = [];
