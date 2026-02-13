@@ -938,6 +938,13 @@ function App() {
             }
 
             recordingStartTime.current = Date.now();
+
+            // 🧹 Clear previous session state
+            setTranscript([]);
+            setLiveTranscript('');
+            setAiFeedback(null);
+            setChatMessages([]);
+
             startTimer();
         } catch (error) {
             alert('ไม่สามารถเข้าถึงไมค์ได้ กรุณาอนุญาตการใช้งานไมค์');
@@ -960,14 +967,13 @@ function App() {
             recog.maxAlternatives = 1;
 
             const transcriptSegments = [];
-            let currentSegment = { text: '', startTime: 0, endTime: 0 };
+            let segmentStartTime = null; // Accurate start of speech
             let interimTimeout = null;
             let lastFinalTime = 0;
 
             recog.onstart = () => {
                 console.log('✅ Speech recognition started');
-                currentSegment.startTime = (Date.now() - recordingStartTime.current) / 1000;
-                lastFinalTime = currentSegment.startTime;
+                // Don't set startTime here, wait for actual speech
             };
 
             recog.onresult = (event) => {
@@ -988,20 +994,29 @@ function App() {
 
                 // Save final transcript with timestamp
                 if (finalTranscript) {
-                    const endTime = (Date.now() - recordingStartTime.current) / 1000;
+                    const currentTime = (Date.now() - recordingStartTime.current) / 1000;
+                    const endTime = currentTime;
+
+                    // If no start time was recorded (rare), use current
+                    if (segmentStartTime === null) segmentStartTime = currentTime;
 
                     // Create segment with proper timing
                     transcriptSegments.push({
                         text: finalTranscript.trim(),
-                        startTime: lastFinalTime,
+                        startTime: segmentStartTime,
                         endTime: endTime
                     });
 
                     setTranscript([...transcriptSegments]);
-                    lastFinalTime = endTime;
+                    segmentStartTime = null; // Reset for next segment
 
                     // Clear interim timeout
                     if (interimTimeout) clearTimeout(interimTimeout);
+                }
+
+                // Capture start time on first activity
+                if ((interimTranscript || finalTranscript) && segmentStartTime === null) {
+                    segmentStartTime = (Date.now() - recordingStartTime.current) / 1000;
                 }
 
                 // If we have interim results, set a timeout to force finalization
@@ -1310,7 +1325,7 @@ function App() {
         setTodayCompleted(true);
 
         saveProgress(currentDay, newSessions);
-        localStorage.setItem(`completed_day_${currentDay} `, 'true');
+        localStorage.setItem(`completed_day_${currentDay}`, 'true');
 
         // Check achievements
         checkAchievements(newSessions, score);
@@ -1326,9 +1341,9 @@ function App() {
             setTimeout(() => {
                 const nextDay = currentDay + 1;
                 setCurrentDay(nextDay);
-                setTodayCompleted(false);
+                // Keep todayCompleted = true to prevent immediate re-training
                 localStorage.setItem('current_day', nextDay.toString());
-                localStorage.removeItem(`completed_day_${nextDay} `);
+                localStorage.removeItem(`completed_day_${nextDay}`);
             }, 2000);
         }
     }
@@ -1390,6 +1405,7 @@ function App() {
         setAiFeedback(null);
         setTranscript([]);
         setLiveTranscript('');
+        setChatMessages([]);
         setCurrentSentenceIndex(-1);
     }
 
@@ -1886,12 +1902,14 @@ function TrainingView({ currentDay, topicData, weekData, timer, isTimerRunning, 
                     )}
 
                     {timer > 0 && !isRecording && (
-                        <button
-                            onClick={resetTimer}
-                            className="bg-gray-300 text-gray-700 px-8 py-4 rounded-xl font-bold text-lg hover:shadow-xl transition"
-                        >
-                            🔄 ลองใหม่
-                        </button>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={resetTimer}
+                                className="bg-gray-300 text-gray-700 px-8 py-4 rounded-xl font-bold text-lg hover:shadow-xl transition"
+                            >
+                                🔄 ลองใหม่
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -2249,31 +2267,28 @@ function TrainingView({ currentDay, topicData, weekData, timer, isTimerRunning, 
             )}
 
 
-            {/* Complete Form */}
             {showCompleteForm && (
                 <div className="glass-effect rounded-3xl p-8 shadow-2xl">
                     <h3 className="text-2xl font-bold text-gray-800 mb-6">
-                        {aiFeedback ? '✨ AI ให้คะแนนแล้ว!' : 'ประเมินผลการฝึก'}
+                        {aiFeedback ? '✨ AI วิเคราะห์เสร็จแล้ว!' : 'ประเมินผลการฝึก'}
                     </h3>
 
-                    {!aiFeedback && (
-                        <div className="mb-6">
-                            <label className="block text-gray-700 font-semibold mb-2">
-                                คะแนนพึงพอใจ (1-10)
-                            </label>
-                            <input
-                                type="range"
-                                min="1"
-                                max="10"
-                                value={score}
-                                onChange={(e) => setScore(parseInt(e.target.value))}
-                                className="w-full h-3 bg-purple-200 rounded-lg appearance-none cursor-pointer"
-                            />
-                            <div className="text-center mt-2">
-                                <span className="text-4xl font-bold text-purple-600">{score}/10</span>
-                            </div>
+                    <div className="mb-6">
+                        <label className="block text-gray-700 font-semibold mb-2">
+                            คะแนนความพึงพอใจของตนเอง (1-10)
+                        </label>
+                        <input
+                            type="range"
+                            min="1"
+                            max="10"
+                            value={score}
+                            onChange={(e) => setScore(parseInt(e.target.value))}
+                            className="w-full h-3 bg-purple-200 rounded-lg appearance-none cursor-pointer"
+                        />
+                        <div className="text-center mt-2">
+                            <span className="text-4xl font-bold text-purple-600">{score}/10</span>
                         </div>
-                    )}
+                    </div>
 
                     <div className="mb-6">
                         <label className="block text-gray-700 font-semibold mb-2">

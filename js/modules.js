@@ -156,13 +156,17 @@ class AudioAnalyzer {
             sum += x * x;
         }
         const rms = Math.sqrt(sum / this.dataArray.length);
-        const db = 20 * Math.log10(rms + 1e-10); // dB
+        const db = 20 * Math.log10(rms + 1e-10); // dBFS
+
+        // --- Normalize to 0-100% Scale ---
+        // dBFS typically ranges from -60 (silence) to 0 (clipping)
+        const level = Math.max(0, Math.min(100, (db + 60) * (100 / 60)));
 
         // Update Volume stats
-        if (isFinite(db) && db > -100) {
-            this.stats.volume.max = Math.max(this.stats.volume.max, db);
-            this.stats.volume.min = Math.min(this.stats.volume.min, db);
-            this.stats.volume.sum += db;
+        if (isFinite(level)) {
+            this.stats.volume.max = Math.max(this.stats.volume.max, level);
+            this.stats.volume.min = Math.min(this.stats.volume.min, level);
+            this.stats.volume.sum += level;
             this.stats.volume.count++;
         }
 
@@ -195,14 +199,14 @@ class AudioAnalyzer {
     }
 
     getStats() {
-        const volAvg = this.stats.volume.count ? (this.stats.volume.sum / this.stats.volume.count) : -100;
+        const volAvg = this.stats.volume.count ? (this.stats.volume.sum / this.stats.volume.count) : 0;
         const pitchAvg = this.stats.pitch.count ? (this.stats.pitch.sum / this.stats.pitch.count) : 0;
 
         return {
             volume: {
                 avg: volAvg.toFixed(1),
-                max: this.stats.volume.max !== -Infinity ? this.stats.volume.max.toFixed(1) : -100,
-                min: this.stats.volume.min !== Infinity ? this.stats.volume.min.toFixed(1) : -100
+                max: this.stats.volume.max !== -Infinity ? this.stats.volume.max.toFixed(1) : 0,
+                min: this.stats.volume.min !== Infinity ? this.stats.volume.min.toFixed(1) : 0
             },
             pitch: {
                 avg: pitchAvg.toFixed(0),
@@ -341,8 +345,12 @@ class AICoach {
         let audioStatsText = '';
         if (audioStats) {
             audioStatsText = `\n**📊 สถิติเสียง (Audio Signal Metrics):**
-- Volume (ความดัง): Avg ${audioStats.volume.avg}dB (Max ${audioStats.volume.max}dB)
-   *คำแนะนำ: ปกติเสียงพูดควรอยู่ระหว่าง -20dB ถึง -10dB. ถ้าต่ำกว่า -30dB คือเบาเกินไป*
+- Volume (ความดัง): ${audioStats.volume.avg}% (ช่วง ${audioStats.volume.min}% - ${audioStats.volume.max}%)
+   *เกณฑ์ระดับเสียง (0-100%):*
+   - 0-30%: เบาเกินไป (Quiet/Background)
+   - 40-55%: ค่อนข้างเบา (Soft)
+   - 60-85%: กำลังดี (Ideal Speaking Volume)
+   - 90-100%: ดังเกินไป/เสียงแตก (Too Loud/Clipping)
 - Pitch (ความถี่เสียง): Avg ${audioStats.pitch.avg}Hz (Range ${audioStats.pitch.min}-${audioStats.pitch.max}Hz)
 - Confidence (ความมั่นใจในการถอดความ): ${audioStats.confidence}%
 `;
