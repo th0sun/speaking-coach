@@ -41,8 +41,8 @@ if USE_POSTGRES:
         if not os.path.exists(cert_path):
             try:
                 logger.info('📥 Downloading CockroachDB root certificate...')
-                # Official CockroachDB cert URL
-                url = "https://cockroachlabs.cloud/clusters/root.crt"
+                # Official CockroachDB cert URL (Cluster specific)
+                url = "https://cockroachlabs.cloud/clusters/d35acd16-d99a-4238-92cf-a50c45d83c8a/cert"
                 response = requests.get(url, allow_redirects=True)
                 if response.status_code == 200:
                     with open(cert_path, 'wb') as f:
