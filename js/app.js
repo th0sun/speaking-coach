@@ -474,6 +474,17 @@ function App() {
                 const userData = JSON.parse(savedUserData);
                 console.log('🔄 Restoring saved session for:', user.username);
                 handleLogin(user, userData);
+
+                // 🔄 Force sync with backend to ensure data is fresh (especially API Keys)
+                fetch(`${CONFIG.BACKEND_URL}/api/get_data?user_id=${user.id}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.data) {
+                            console.log('☁️ Synced fresh data from cloud');
+                            handleLogin(user, data.data);
+                        }
+                    })
+                    .catch(e => console.error('⚠️ Background sync failed:', e));
             } catch (err) {
                 console.error('❌ Failed to restore session:', err);
                 setIsAuthChecking(false);
