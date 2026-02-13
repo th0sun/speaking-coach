@@ -35,6 +35,18 @@ if USE_POSTGRES:
     try:
         import psycopg2  # type: ignore
         logger.info('✅ PostgreSQL mode enabled')
+
+        # Download CockroachDB root certificate if needed (for Render)
+        cert_path = '/tmp/root.crt'
+        if not os.path.exists(cert_path):
+            try:
+                logger.info('📥 Downloading CockroachDB root certificate...')
+                # Official CockroachDB cert URL
+                os.system(f"curl --create-dirs -o {cert_path} https://cockroachlabs.cloud/clusters/root.crt")
+                logger.info(f'✅ Certificate downloaded to {cert_path}')
+            except Exception as e:
+                logger.warning(f'⚠️ Failed to download certificate: {e}')
+
     except ImportError:
         logger.warning('⚠️ psycopg2 not installed, falling back to SQLite')
         USE_POSTGRES = False
@@ -173,7 +185,12 @@ def init_db():
     """Initialize the database with users table (PostgreSQL or SQLite)"""
     try:
         if USE_POSTGRES:
-            conn = psycopg2.connect(DATABASE_URL)
+            # Handle SSL for CockroachDB
+            db_config = {'dsn': DATABASE_URL}
+            if 'sslrootcert' not in DATABASE_URL and os.path.exists('/tmp/root.crt'):
+                db_config['sslrootcert'] = '/tmp/root.crt'
+            
+            conn = psycopg2.connect(DATABASE_URL, sslrootcert='/tmp/root.crt')
             c = conn.cursor()
             c.execute('''
                 CREATE TABLE IF NOT EXISTS users (
@@ -230,7 +247,7 @@ def register():
         })
         
         if USE_POSTGRES:
-            conn = psycopg2.connect(DATABASE_URL)
+            conn = psycopg2.connect(DATABASE_URL, sslrootcert='/tmp/root.crt')
             c = conn.cursor()
             c.execute("INSERT INTO users (username, pin, data) VALUES (%s, %s, %s) RETURNING id", 
                      (username, pin, initial_data))
@@ -265,7 +282,7 @@ def login():
 
     try:
         if USE_POSTGRES:
-            conn = psycopg2.connect(DATABASE_URL)
+            conn = psycopg2.connect(DATABASE_URL, sslrootcert='/tmp/root.crt')
             c = conn.cursor()
             c.execute("SELECT id, username, data FROM users WHERE username = %s AND pin = %s", (username, pin))
             user = c.fetchone()
@@ -305,7 +322,7 @@ def save_data():
 
     try:
         if USE_POSTGRES:
-            conn = psycopg2.connect(DATABASE_URL)
+            conn = psycopg2.connect(DATABASE_URL, sslrootcert='/tmp/root.crt')
             c = conn.cursor()
             c.execute("UPDATE users SET data = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", 
                      (json.dumps(user_data), user_id))
@@ -333,7 +350,7 @@ def get_data():
 
     try:
         if USE_POSTGRES:
-            conn = psycopg2.connect(DATABASE_URL)
+            conn = psycopg2.connect(DATABASE_URL, sslrootcert='/tmp/root.crt')
             c = conn.cursor()
             c.execute("SELECT data FROM users WHERE id = %s", (user_id,))
             result = c.fetchone()
