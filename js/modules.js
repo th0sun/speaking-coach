@@ -33,7 +33,7 @@ const CONFIG = {
     ],
 
     // App settings
-    APP_VERSION: '3.16',
+    APP_VERSION: '3.17',
     APP_NAME: 'Speaking Coach Pro',
 
     // Debug mode
